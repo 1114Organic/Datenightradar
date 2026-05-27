@@ -2,6 +2,12 @@
 
 Date Night Radar is a low-cost serverless MVP for remembering restaurants, tracking visits, and generating three explainable recommendations: Safe Bet, New Adventure, and Wildcard.
 
+## Screenshots
+
+![Date Night Radar home screen](docs/screenshots/home.jpg)
+
+![Date Night Radar recommendation cards](docs/screenshots/recommendations.jpg)
+
 ## Stack
 
 - React + Vite + TypeScript frontend in `apps/web`
