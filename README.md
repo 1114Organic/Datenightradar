@@ -52,19 +52,18 @@ Prerequisites:
 npm install
 npm run build
 npm run cdk -- bootstrap
-npm run cdk -- synth -c authMode=dev
-npm run cdk -- deploy -c authMode=dev
-```
-
-The `authMode=dev` deployment is the fastest way to get a working hosted MVP. It uses `DEV_AUTH_BYPASS=true` with `DEFAULT_USER_ID=dev-user`, so do not treat it as production auth.
-
-For the production direction, deploy with Cognito enabled:
-
-```bash
 npm run cdk -- deploy -c authMode=cognito
 ```
 
 The `authMode=cognito` stack protects API routes with a Cognito authorizer. The current frontend still needs a sign-in flow before that mode is usable from the browser.
+
+For a temporary private demo only, deploy with:
+
+```bash
+npm run cdk -- deploy -c authMode=dev
+```
+
+The `authMode=dev` deployment uses `DEV_AUTH_BYPASS=true` with `DEFAULT_USER_ID=dev-user`. Do not use it for a public or production deployment.
 
 The CDK stack creates S3 + CloudFront, API Gateway HTTP API, Lambda, DynamoDB, Cognito, and least-privilege table access. It also uploads `apps/web/dist` to the hosting bucket and invalidates CloudFront.
 

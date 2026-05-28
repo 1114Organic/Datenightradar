@@ -14,7 +14,7 @@ import { BucketDeployment, Source } from "aws-cdk-lib/aws-s3-deployment";
 export class RestaurantRadarStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-    const authMode = this.node.tryGetContext("authMode") === "cognito" ? "cognito" : "dev";
+    const authMode = this.node.tryGetContext("authMode") === "dev" ? "dev" : "cognito";
 
     const table = new Table(this, "RestaurantRadarTable", {
       tableName: "RestaurantRadarTable",
