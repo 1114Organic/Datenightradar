@@ -17,6 +17,7 @@ jobs:
   detect-ai-usage:
     name: Detect AI Usage Signals
     runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
 
     steps:
       - name: Check out repository
@@ -76,8 +77,8 @@ jobs:
             AI_REASON="$AI_REASON Commit message references AI;"
           fi
 
-          TEST_COUNT=$(echo "$CHANGED_FILES" | grep -iE -- "test|spec|__tests__" | wc -l | xargs)
-          DOC_COUNT=$(echo "$CHANGED_FILES" | grep -iE -- "\.md$|docs/|README|SECURITY" | wc -l | xargs)
+          TEST_COUNT=$(echo "$CHANGED_FILES" | { grep -iE -- "test|spec|__tests__" || true; } | wc -l | xargs)
+          DOC_COUNT=$(echo "$CHANGED_FILES" | { grep -iE -- "\.md$|docs/|README|SECURITY" || true; } | wc -l | xargs)
 
           if [ "$TEST_COUNT" -ge 3 ]; then
             AI_TESTS=true
@@ -98,6 +99,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Ensure AI measurement labels exist
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
@@ -128,6 +130,7 @@ jobs:
             }
 
       - name: Apply AI usage labels
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
@@ -156,6 +159,7 @@ jobs:
 
       - name: Ask for confirmation when AI is likely
         if: steps.detect.outputs.ai_detected == 'true'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
