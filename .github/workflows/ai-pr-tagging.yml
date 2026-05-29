@@ -17,6 +17,7 @@ jobs:
   detect-ai-usage:
     name: Detect AI Usage Signals
     runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
 
     steps:
       - name: Check out repository
