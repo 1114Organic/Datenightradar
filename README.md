@@ -16,6 +16,15 @@ Date Night Radar is a low-cost serverless MVP for remembering restaurants, track
 - AWS CDK TypeScript infrastructure in `infra`
 - Manual-only external restaurant search by default
 
+## AI Measurement
+
+This repo includes a lightweight AI measurement pilot for team-level workflow visibility:
+
+- PR template AI usage declaration
+- Automated AI usage labels
+- CodeQL, CI, Dependabot, and security notes
+- Dashboard and pulse survey guidance in [docs/ai-measurement-pilot.md](docs/ai-measurement-pilot.md)
+
 ## Local Setup
 
 ```bash

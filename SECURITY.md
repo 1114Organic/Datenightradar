@@ -11,3 +11,13 @@ Before public deployment:
 - Restrict API CORS origins to the deployed CloudFront domain.
 - Store future external restaurant API keys in SSM Parameter Store or Secrets Manager.
 - Review `npm audit` output and upgrade vulnerable dependencies where compatible.
+
+Recommended GitHub repository settings:
+
+- Enable secret scanning and push protection.
+- Enable Dependabot alerts and Dependabot security updates.
+- Enable CodeQL/code scanning alerts.
+- Protect `main` by requiring pull requests, required status checks, branch freshness, conversation resolution, and CODEOWNERS review.
+- Block force pushes and branch deletion on `main`.
+- Use GitHub Actions environment protection for future AWS deployments.
+- Use GitHub OIDC to AWS instead of long-lived AWS access keys.
