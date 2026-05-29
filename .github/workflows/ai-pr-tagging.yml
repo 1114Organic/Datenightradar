@@ -77,8 +77,8 @@ jobs:
             AI_REASON="$AI_REASON Commit message references AI;"
           fi
 
-          TEST_COUNT=$(echo "$CHANGED_FILES" | grep -iE -- "test|spec|__tests__" | wc -l | xargs)
-          DOC_COUNT=$(echo "$CHANGED_FILES" | grep -iE -- "\.md$|docs/|README|SECURITY" | wc -l | xargs)
+          TEST_COUNT=$(echo "$CHANGED_FILES" | { grep -iE -- "test|spec|__tests__" || true; } | wc -l | xargs)
+          DOC_COUNT=$(echo "$CHANGED_FILES" | { grep -iE -- "\.md$|docs/|README|SECURITY" || true; } | wc -l | xargs)
 
           if [ "$TEST_COUNT" -ge 3 ]; then
             AI_TESTS=true
