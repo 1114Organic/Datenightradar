@@ -1,0 +1,169 @@
+name: AI PR Tagging
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  detect-ai-usage:
+    name: Detect AI Usage Signals
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect AI indicators
+        id: detect
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BRANCH: ${{ github.head_ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          AI_DETECTED=false
+          AI_REASON=""
+          AI_AGENT=false
+          AI_DOCS=false
+          AI_TESTS=false
+          AI_CONFIRMED=false
+          NO_AI_DECLARED=false
+
+          if echo "$PR_BODY" | grep -iE -- "- \[[xX]\] AI-assisted|- \[[xX]\] AI agent generated work" > /dev/null; then
+            AI_DETECTED=true
+            AI_CONFIRMED=true
+            AI_REASON="$AI_REASON PR template confirms AI assistance;"
+          fi
+
+          if echo "$PR_BODY" | grep -iE -- "- \[[xX]\] No AI used" > /dev/null; then
+            NO_AI_DECLARED=true
+          fi
+
+          if echo "$PR_BODY" | grep -iE -- "copilot|chatgpt|claude|codex|ai-assisted|ai generated|ai-generated|agent" > /dev/null; then
+            AI_DETECTED=true
+            AI_REASON="$AI_REASON PR body references AI;"
+          fi
+
+          if echo "$PR_AUTHOR" | grep -iE -- "bot|agent|copilot|codex" > /dev/null; then
+            AI_DETECTED=true
+            AI_AGENT=true
+            AI_REASON="$AI_REASON PR author appears automated;"
+          fi
+
+          if echo "$BRANCH" | grep -iE -- "^ai/|^agent/|^codex/|copilot|openai|claude|chatgpt" > /dev/null; then
+            AI_DETECTED=true
+            AI_REASON="$AI_REASON Branch name suggests AI usage;"
+          fi
+
+          git fetch origin "$BASE_REF" --depth=1
+          CHANGED_FILES=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          COMMIT_MESSAGES=$(git log --format=%B "origin/$BASE_REF...HEAD")
+
+          if echo "$COMMIT_MESSAGES" | grep -iE -- "copilot|chatgpt|claude|codex|ai-assisted|ai generated|ai-generated|agent" > /dev/null; then
+            AI_DETECTED=true
+            AI_REASON="$AI_REASON Commit message references AI;"
+          fi
+
+          TEST_COUNT=$(echo "$CHANGED_FILES" | grep -iE -- "test|spec|__tests__" | wc -l | xargs)
+          DOC_COUNT=$(echo "$CHANGED_FILES" | grep -iE -- "\.md$|docs/|README|SECURITY" | wc -l | xargs)
+
+          if [ "$TEST_COUNT" -ge 3 ]; then
+            AI_TESTS=true
+          fi
+
+          if [ "$DOC_COUNT" -ge 2 ]; then
+            AI_DOCS=true
+          fi
+
+          {
+            echo "ai_detected=$AI_DETECTED"
+            echo "ai_agent=$AI_AGENT"
+            echo "ai_docs=$AI_DOCS"
+            echo "ai_tests=$AI_TESTS"
+            echo "ai_confirmed=$AI_CONFIRMED"
+            echo "no_ai_declared=$NO_AI_DECLARED"
+            echo "ai_reason=$AI_REASON"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ensure AI measurement labels exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'ai-assisted-confirmed', color: '0e8a16', description: 'Developer or reviewer confirmed meaningful AI assistance.' },
+              { name: 'ai-assisted-likely', color: 'fbca04', description: 'Automation detected one or more AI usage indicators.' },
+              { name: 'ai-agent-authored', color: '5319e7', description: 'PR or commits appear to be created by an AI agent or service account.' },
+              { name: 'ai-generated-tests', color: '1d76db', description: 'PR appears to include significant generated or expanded test coverage.' },
+              { name: 'ai-generated-docs', color: 'bfdadc', description: 'PR appears to include significant generated or expanded documentation.' },
+              { name: 'ai-usage-unknown', color: 'cfd3d7', description: 'PR did not include a completed AI usage declaration and no strong signal was detected.' }
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label
+                });
+              }
+            }
+
+      - name: Apply AI usage labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.payload.pull_request.number;
+            const labels = [];
+            const aiDetected = '${{ steps.detect.outputs.ai_detected }}' === 'true';
+            const aiAgent = '${{ steps.detect.outputs.ai_agent }}' === 'true';
+            const aiDocs = '${{ steps.detect.outputs.ai_docs }}' === 'true';
+            const aiTests = '${{ steps.detect.outputs.ai_tests }}' === 'true';
+            const aiConfirmed = '${{ steps.detect.outputs.ai_confirmed }}' === 'true';
+            const noAiDeclared = '${{ steps.detect.outputs.no_ai_declared }}' === 'true';
+
+            if (aiConfirmed) labels.push('ai-assisted-confirmed');
+            if (aiDetected && !aiConfirmed) labels.push('ai-assisted-likely');
+            if (aiAgent) labels.push('ai-agent-authored');
+            if (aiDocs) labels.push('ai-generated-docs');
+            if (aiTests) labels.push('ai-generated-tests');
+            if (!aiDetected && !noAiDeclared) labels.push('ai-usage-unknown');
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              labels
+            });
+
+      - name: Ask for confirmation when AI is likely
+        if: steps.detect.outputs.ai_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.payload.pull_request.number;
+            const reason = `${{ steps.detect.outputs.ai_reason }}` || 'One or more AI usage indicators were detected.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              body: `AI usage signal detected: ${reason}\n\nPlease confirm or correct the AI Usage section in the PR template. This is used for team-level workflow measurement only.`
+            });
