@@ -3,9 +3,11 @@ import { createAppService } from "../services/factory.js";
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2> {
   try {
+    const method = event.requestContext.http.method;
+    if (method === "OPTIONS") return empty(204);
+
     const userId = currentUserId(event);
     const service = createAppService();
-    const method = event.requestContext.http.method;
     const path = event.rawPath.replace(/^\/api/, "") || "/";
     const body = event.body ? JSON.parse(event.body) : {};
     const query = event.queryStringParameters ?? {};
@@ -50,12 +52,23 @@ function currentUserId(event: APIGatewayProxyEventV2): string {
 function json(data: unknown, statusCode = 200): APIGatewayProxyStructuredResultV2 {
   return {
     statusCode,
-    headers: {
-      "content-type": "application/json",
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "content-type,authorization",
-      "access-control-allow-methods": "GET,PUT,POST,OPTIONS"
-    },
+    headers: { ...corsHeaders(), "content-type": "application/json" },
     body: JSON.stringify(data)
+  };
+}
+
+function empty(statusCode: number): APIGatewayProxyStructuredResultV2 {
+  return {
+    statusCode,
+    headers: corsHeaders(),
+    body: ""
+  };
+}
+
+function corsHeaders() {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "content-type,authorization",
+    "access-control-allow-methods": "GET,PUT,POST,OPTIONS"
   };
 }
