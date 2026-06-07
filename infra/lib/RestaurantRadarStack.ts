@@ -2,7 +2,8 @@ import { CfnOutput, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-l
 import { Construct } from "constructs";
 import { CfnBudget } from "aws-cdk-lib/aws-budgets";
 import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
-import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Runtime } from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { CorsHttpMethod, HttpApi, HttpMethod } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
@@ -43,13 +44,18 @@ export class RestaurantRadarStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN
     });
 
-    const apiFunction = new Function(this, "ApiFunction", {
-      code: Code.fromAsset("../apps/api/dist"),
-      handler: "handlers/api.handler",
+    const apiFunction = new NodejsFunction(this, "ApiFunction", {
+      entry: "../apps/api/src/handlers/api.ts",
+      handler: "handler",
       runtime: Runtime.NODEJS_20_X,
       timeout: Duration.seconds(10),
       memorySize: 256,
       logGroup: apiLogGroup,
+      bundling: {
+        format: OutputFormat.CJS,
+        target: "node20",
+        externalModules: []
+      },
       environment: {
         APP_ENV: "prod",
         TABLE_NAME: table.tableName,
