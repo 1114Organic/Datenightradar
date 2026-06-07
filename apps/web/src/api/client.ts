@@ -54,9 +54,10 @@ export const api = {
 };
 
 async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+  const headers = options.body ? { "content-type": "application/json" } : undefined;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
-    headers: { "content-type": "application/json" },
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
   if (!response.ok) throw new Error(await response.text());
