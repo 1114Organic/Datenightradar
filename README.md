@@ -25,6 +25,10 @@ This repo includes a lightweight AI measurement pilot for team-level workflow vi
 - CodeQL, CI, Dependabot, and security notes
 - Dashboard and pulse survey guidance in [docs/ai-measurement-pilot.md](docs/ai-measurement-pilot.md)
 
+## Standard Operating Procedure
+
+Use [docs/sop.md](docs/sop.md) for the default change, deploy, and verification flow. It includes Playwright MCP browser checks for frontend changes, deployed smoke tests, and browser bug triage.
+
 ## Local Setup
 
 ```bash
