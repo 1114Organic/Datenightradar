@@ -11,7 +11,7 @@
     "dev:api": "npm run dev --workspace apps/api",
     "build": "npm run build --workspace apps/api && npm run build --workspace apps/web && npm run build --workspace infra",
     "typecheck": "npm run typecheck --workspaces",
-    "cdk": "npm run cdk --workspace infra"
+    "cdk": "npm run cdk --workspace infra --"
   },
   "engines": {
     "node": ">=20"

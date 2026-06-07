@@ -1,7 +1,9 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { CfnBudget } from "aws-cdk-lib/aws-budgets";
 import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { CorsHttpMethod, HttpApi, HttpMethod } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -15,6 +17,12 @@ export class RestaurantRadarStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
     const authMode = this.node.tryGetContext("authMode") === "dev" ? "dev" : "cognito";
+    const budgetEmail = this.node.tryGetContext("budgetEmail") as string | undefined;
+    const requestedBudgetLimit = Number(this.node.tryGetContext("monthlyBudgetLimit") ?? 10);
+    const monthlyBudgetLimit = Number.isFinite(requestedBudgetLimit) && requestedBudgetLimit > 0
+      ? requestedBudgetLimit
+      : 10;
+    const budgetAlertThresholds = Array.from(new Set([1, 5, monthlyBudgetLimit])).sort((a, b) => a - b);
 
     const table = new Table(this, "RestaurantRadarTable", {
       tableName: "RestaurantRadarTable",
@@ -30,12 +38,18 @@ export class RestaurantRadarStack extends Stack {
     });
     const userPoolClient = userPool.addClient("WebClient");
 
+    const apiLogGroup = new LogGroup(this, "ApiFunctionLogGroup", {
+      retention: RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.RETAIN
+    });
+
     const apiFunction = new Function(this, "ApiFunction", {
       code: Code.fromAsset("../apps/api/dist"),
       handler: "handlers/api.handler",
       runtime: Runtime.NODEJS_20_X,
       timeout: Duration.seconds(10),
       memorySize: 256,
+      logGroup: apiLogGroup,
       environment: {
         APP_ENV: "prod",
         TABLE_NAME: table.tableName,
@@ -88,7 +102,48 @@ export class RestaurantRadarStack extends Stack {
       distributionPaths: ["/*"]
     });
 
+    if (budgetEmail) {
+      new CfnBudget(this, "MonthlyCostBudget", {
+        budget: {
+          budgetName: "DateNightRadar-Monthly-Cost",
+          budgetType: "COST",
+          timeUnit: "MONTHLY",
+          budgetLimit: {
+            amount: monthlyBudgetLimit,
+            unit: "USD"
+          }
+        },
+        notificationsWithSubscribers: [
+          ...budgetAlertThresholds.map((threshold) => ({
+            notification: {
+              comparisonOperator: "GREATER_THAN",
+              notificationType: "ACTUAL",
+              threshold,
+              thresholdType: "ABSOLUTE_VALUE"
+            },
+            subscribers: [{
+              address: budgetEmail,
+              subscriptionType: "EMAIL"
+            }]
+          })),
+          {
+            notification: {
+              comparisonOperator: "GREATER_THAN",
+              notificationType: "FORECASTED",
+              threshold: monthlyBudgetLimit,
+              thresholdType: "ABSOLUTE_VALUE"
+            },
+            subscribers: [{
+              address: budgetEmail,
+              subscriptionType: "EMAIL"
+            }]
+          }
+        ]
+      });
+    }
+
     new CfnOutput(this, "AuthMode", { value: authMode });
+    new CfnOutput(this, "BudgetAlerts", { value: budgetEmail ? `Enabled for ${budgetEmail}` : "Disabled. Pass -c budgetEmail=you@example.com to enable." });
     new CfnOutput(this, "ApiUrl", { value: httpApi.apiEndpoint });
     new CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new CfnOutput(this, "UserPoolClientId", { value: userPoolClient.userPoolClientId });
