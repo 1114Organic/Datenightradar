@@ -18,6 +18,7 @@ export function App() {
   const [visitRestaurantId, setVisitRestaurantId] = useState("");
   const [status, setStatus] = useState<{ tone: "success" | "error" | "info"; message: string }>();
   const [busyAction, setBusyAction] = useState<"add" | "recommend" | "profile" | "visit">();
+  const [showSavedRestaurants, setShowSavedRestaurants] = useState(false);
 
   useEffect(() => {
     api.getProfile().then((next) => {
@@ -172,22 +173,6 @@ export function App() {
           <button className="primary" disabled={!visitRestaurantId || busyAction === "visit"} onClick={() => markVisited(visitRestaurantId)}><Save size={18} /> {busyAction === "visit" ? "Saving..." : "Would go back"}</button>
         </div>
 
-        <div className="panel restaurant-list">
-          <h2>Saved Restaurants</h2>
-          {restaurants.length ? (
-            <div className="saved-list">
-              {restaurants.slice(0, 8).map((restaurant) => (
-                <div className="saved-restaurant" key={restaurant.restaurantId}>
-                  <strong>{restaurant.name}</strong>
-                  <span>{displayRestaurantLocation(restaurant)} · {restaurant.cuisineCategories.join(", ") || "Unknown"} · {restaurant.priceLevel}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="empty">No restaurants saved yet.</p>
-          )}
-        </div>
-
         {profile && (
           <div className="panel profile-panel">
             <h2>Preferences</h2>
@@ -197,6 +182,28 @@ export function App() {
             <ChipInput label="Preferred tags" options={tags} value={profile.preferredTags} onChange={(preferredTags) => setProfile({ ...profile, preferredTags })} />
             <ChipInput label="Price levels" options={prices} value={profile.preferredPriceLevels} onChange={(preferredPriceLevels) => setProfile({ ...profile, preferredPriceLevels })} />
             <button className="primary" disabled={busyAction === "profile"} onClick={saveProfile}><Save size={18} /> {busyAction === "profile" ? "Saving..." : "Save"}</button>
+            <div className="profile-links">
+              <button type="button" className="text-link" onClick={() => setShowSavedRestaurants((current) => !current)}>
+                {showSavedRestaurants ? "Hide saved restaurants" : `View saved restaurants (${restaurants.length})`}
+              </button>
+            </div>
+            {showSavedRestaurants && (
+              <section className="saved-restaurants-panel" aria-label="Saved restaurants">
+                <h3>Saved Restaurants</h3>
+                {restaurants.length ? (
+                  <div className="saved-list">
+                    {restaurants.slice(0, 8).map((restaurant) => (
+                      <div className="saved-restaurant" key={restaurant.restaurantId}>
+                        <strong>{restaurant.name}</strong>
+                        <span>{displayRestaurantLocation(restaurant)} · {restaurant.cuisineCategories.join(", ") || "Unknown"} · {restaurant.priceLevel}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty">No restaurants saved yet.</p>
+                )}
+              </section>
+            )}
           </div>
         )}
       </section>
