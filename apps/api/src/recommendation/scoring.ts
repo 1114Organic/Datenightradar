@@ -97,6 +97,8 @@ function toRecommendation(category: Recommendation["category"], item: ScoredRest
     score: item.score,
     cuisine: item.restaurant.cuisineCategories.join(", ") || "Unknown",
     area: item.restaurant.area,
+    city: item.restaurant.city,
+    state: item.restaurant.state,
     priceLevel: item.restaurant.priceLevel,
     tags: item.restaurant.tags,
     reasons: item.reasons

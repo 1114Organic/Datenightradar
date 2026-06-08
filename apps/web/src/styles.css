@@ -257,6 +257,12 @@ ul {
   box-shadow: none;
 }
 
+.location-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 120px;
+  gap: 12px;
+}
+
 .profile-panel {
   grid-column: 1 / -1;
 }
@@ -302,5 +308,9 @@ ul {
 
   h1 {
     font-size: 46px;
+  }
+
+  .location-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -7,21 +7,23 @@ import { RecommendationCard } from "./components/RecommendationCard";
 const cuisines = ["Italian", "Mexican", "Thai", "Indian", "American", "Japanese", "Mediterranean"];
 const tags = ["date-night", "casual", "outdoor-seating", "brunch", "cocktails", "quiet", "upscale", "quick-bite", "good-parking", "worth-the-drive"];
 const prices = ["$", "$$", "$$$", "$$$$"];
+const defaultArea = "Charleston, SC";
 
 export function App() {
   const [profile, setProfile] = useState<UserProfile>();
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [request, setRequest] = useState({ area: "Reston", occasion: "date-night", priceLevels: ["$$", "$$$"], newOnly: true, includeWantToTry: true });
-  const [newRestaurant, setNewRestaurant] = useState({ name: "", area: "Reston", cuisineCategories: ["Thai"], priceLevel: "$$", tags: ["date-night"] });
+  const [request, setRequest] = useState({ area: defaultArea, occasion: "date-night", priceLevels: ["$$", "$$$"], newOnly: true, includeWantToTry: true });
+  const [newRestaurant, setNewRestaurant] = useState({ name: "", city: "Charleston", state: "SC", zipCode: "", cuisineCategories: ["Thai"], priceLevel: "$$", tags: ["date-night"] });
   const [visitRestaurantId, setVisitRestaurantId] = useState("");
   const [status, setStatus] = useState<{ tone: "success" | "error" | "info"; message: string }>();
   const [busyAction, setBusyAction] = useState<"add" | "recommend" | "profile" | "visit">();
 
   useEffect(() => {
     api.getProfile().then((next) => {
-      setProfile(next);
-      setRequest((current) => ({ ...current, area: next.homeArea || current.area, priceLevels: next.preferredPriceLevels.length ? next.preferredPriceLevels : current.priceLevels }));
+      const nextProfile = next.homeArea === "Reston" ? { ...next, homeArea: defaultArea } : next;
+      setProfile(nextProfile);
+      setRequest((current) => ({ ...current, area: nextProfile.homeArea || current.area, priceLevels: next.preferredPriceLevels.length ? next.preferredPriceLevels : current.priceLevels }));
     });
     refreshRestaurants();
   }, []);
@@ -75,7 +77,10 @@ export function App() {
     setBusyAction("add");
     setStatus(undefined);
     try {
-      const created = await api.createRestaurant(newRestaurant);
+      const created = await api.createRestaurant({
+        ...newRestaurant,
+        area: formatRestaurantArea(newRestaurant.city, newRestaurant.state)
+      });
       setNewRestaurant({ ...newRestaurant, name: "" });
       setRequest((current) => ({ ...current, area: created.area }));
       await refreshRestaurants();
@@ -145,7 +150,11 @@ export function App() {
         <div className="panel">
           <h2>Add Restaurant</h2>
           <label className="field"><span>Name</span><input value={newRestaurant.name} onChange={(event) => setNewRestaurant({ ...newRestaurant, name: event.target.value })} /></label>
-          <label className="field"><span>Area</span><input value={newRestaurant.area} onChange={(event) => setNewRestaurant({ ...newRestaurant, area: event.target.value })} /></label>
+          <div className="location-grid">
+            <label className="field"><span>City</span><input value={newRestaurant.city} onChange={(event) => setNewRestaurant({ ...newRestaurant, city: event.target.value })} /></label>
+            <label className="field"><span>State</span><input value={newRestaurant.state} maxLength={2} onChange={(event) => setNewRestaurant({ ...newRestaurant, state: event.target.value.toUpperCase() })} /></label>
+            <label className="field"><span>ZIP</span><input value={newRestaurant.zipCode} inputMode="numeric" onChange={(event) => setNewRestaurant({ ...newRestaurant, zipCode: event.target.value })} /></label>
+          </div>
           <ChipInput label="Cuisine" options={cuisines} value={newRestaurant.cuisineCategories} onChange={(cuisineCategories) => setNewRestaurant({ ...newRestaurant, cuisineCategories })} />
           <ChipInput label="Tags" options={tags} value={newRestaurant.tags} onChange={(nextTags) => setNewRestaurant({ ...newRestaurant, tags: nextTags })} />
           <button className="primary" disabled={busyAction === "add"} onClick={addRestaurant}><Plus size={18} /> {busyAction === "add" ? "Adding..." : "Add"}</button>
@@ -170,7 +179,7 @@ export function App() {
               {restaurants.slice(0, 8).map((restaurant) => (
                 <div className="saved-restaurant" key={restaurant.restaurantId}>
                   <strong>{restaurant.name}</strong>
-                  <span>{restaurant.area} · {restaurant.cuisineCategories.join(", ") || "Unknown"} · {restaurant.priceLevel}</span>
+                  <span>{displayRestaurantLocation(restaurant)} · {restaurant.cuisineCategories.join(", ") || "Unknown"} · {restaurant.priceLevel}</span>
                 </div>
               ))}
             </div>
@@ -197,4 +206,15 @@ export function App() {
 
 function messageFromError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+function formatRestaurantArea(city: string, state: string) {
+  const cleanedCity = city.trim();
+  const cleanedState = state.trim().toUpperCase();
+  return [cleanedCity, cleanedState].filter(Boolean).join(", ");
+}
+
+function displayRestaurantLocation(restaurant: Restaurant) {
+  const cityState = formatRestaurantArea(restaurant.city ?? "", restaurant.state ?? "");
+  return [cityState || restaurant.area, restaurant.zipCode].filter(Boolean).join(" ");
 }

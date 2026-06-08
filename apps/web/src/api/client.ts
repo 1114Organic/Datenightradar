@@ -12,6 +12,9 @@ export interface Restaurant {
   restaurantId: string;
   name: string;
   area: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   address?: string;
   cuisineCategories: string[];
   priceLevel: string;
@@ -27,6 +30,8 @@ export interface Recommendation {
   score: number;
   cuisine: string;
   area: string;
+  city?: string;
+  state?: string;
   priceLevel: string;
   tags: string[];
   reasons: string[];
