@@ -11,7 +11,7 @@ export class AppService {
   async getProfile(userId: string) {
     return (await this.repo.getUserProfile(userId)) ?? this.putProfile(userId, {
       name: "Robert",
-      homeArea: "Reston",
+      homeArea: "Charleston, SC",
       favoriteCuisines: ["Italian", "Mexican", "Thai"],
       dislikedCuisines: [],
       preferredPriceLevels: ["$$", "$$$"],
@@ -27,7 +27,7 @@ export class AppService {
       entityType: "UserProfile",
       userId,
       name: input.name ?? current?.name ?? "",
-      homeArea: input.homeArea ?? current?.homeArea ?? "",
+      homeArea: input.homeArea ?? current?.homeArea ?? "Charleston, SC",
       favoriteCuisines: input.favoriteCuisines ?? current?.favoriteCuisines ?? [],
       dislikedCuisines: input.dislikedCuisines ?? current?.dislikedCuisines ?? [],
       preferredPriceLevels: input.preferredPriceLevels ?? current?.preferredPriceLevels ?? [],
@@ -44,8 +44,11 @@ export class AppService {
       entityType: "Restaurant",
       restaurantId: input.restaurantId ?? randomUUID(),
       name: required(input.name, "name"),
-      area: required(input.area, "area"),
+      area: required(input.area ?? formatArea(input.city, input.state), "area"),
       address: input.address,
+      city: cleanOptional(input.city),
+      state: cleanOptional(input.state),
+      zipCode: cleanOptional(input.zipCode),
       latitude: input.latitude,
       longitude: input.longitude,
       cuisineCategories: input.cuisineCategories ?? [],
@@ -164,4 +167,16 @@ export class AppService {
 function required(value: string | undefined, field: string): string {
   if (!value?.trim()) throw new Error(`${field} is required`);
   return value.trim();
+}
+
+function cleanOptional(value: string | undefined): string | undefined {
+  const cleaned = value?.trim();
+  return cleaned || undefined;
+}
+
+function formatArea(city?: string, state?: string): string | undefined {
+  const cleanedCity = cleanOptional(city);
+  const cleanedState = cleanOptional(state)?.toUpperCase();
+  if (cleanedCity && cleanedState) return `${cleanedCity}, ${cleanedState}`;
+  return cleanedCity ?? cleanedState;
 }

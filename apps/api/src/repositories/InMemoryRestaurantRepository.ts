@@ -79,17 +79,20 @@ export class InMemoryRestaurantRepository implements RestaurantRepository {
   private seed() {
     const timestamp = new Date().toISOString();
     [
-      ["r-1", "Maple & Main", "Reston", ["American"], "$$$", ["date-night", "cocktails", "quiet"], 4.6, 180],
-      ["r-2", "Saffron House", "Herndon", ["Indian"], "$$", ["casual", "worth-the-drive"], 4.5, 220],
-      ["r-3", "Khao Corner", "Reston", ["Thai"], "$$", ["date-night", "good-parking"], 4.4, 95],
-      ["r-4", "Luna Verde", "Vienna", ["Mexican"], "$$", ["outdoor-seating", "cocktails"], 4.3, 145],
-      ["r-5", "Barrel Room", "Reston", ["Italian"], "$$$", ["upscale", "date-night", "cocktails"], 4.2, 70]
-    ].forEach(([restaurantId, name, area, cuisines, priceLevel, tags, publicRating, reviewCount]) => {
+      ["r-1", "Maple & Main", "Charleston, SC", "Charleston", "SC", "29401", ["American"], "$$$", ["date-night", "cocktails", "quiet"], 4.6, 180],
+      ["r-2", "Saffron House", "Mount Pleasant, SC", "Mount Pleasant", "SC", "29464", ["Indian"], "$$", ["casual", "worth-the-drive"], 4.5, 220],
+      ["r-3", "Khao Corner", "Charleston, SC", "Charleston", "SC", "29403", ["Thai"], "$$", ["date-night", "good-parking"], 4.4, 95],
+      ["r-4", "Luna Verde", "North Charleston, SC", "North Charleston", "SC", "29405", ["Mexican"], "$$", ["outdoor-seating", "cocktails"], 4.3, 145],
+      ["r-5", "Barrel Room", "Charleston, SC", "Charleston", "SC", "29401", ["Italian"], "$$$", ["upscale", "date-night", "cocktails"], 4.2, 70]
+    ].forEach(([restaurantId, name, area, city, state, zipCode, cuisines, priceLevel, tags, publicRating, reviewCount]) => {
       this.restaurants.set(String(restaurantId), {
         entityType: "Restaurant",
         restaurantId: String(restaurantId),
         name: String(name),
         area: String(area),
+        city: String(city),
+        state: String(state),
+        zipCode: String(zipCode),
         address: `${name} Ave, ${area}`,
         cuisineCategories: cuisines as string[],
         priceLevel: priceLevel as Restaurant["priceLevel"],
