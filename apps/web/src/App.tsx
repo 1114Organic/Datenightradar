@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Radar, Save } from "lucide-react";
+import { Plus, Radar, Save, UserCircle } from "lucide-react";
 import { api, Recommendation, Restaurant, UserProfile } from "./api/client";
 import { ChipInput } from "./components/ChipInput";
 import { RecommendationCard } from "./components/RecommendationCard";
@@ -19,6 +19,8 @@ export function App() {
   const [status, setStatus] = useState<{ tone: "success" | "error" | "info"; message: string }>();
   const [busyAction, setBusyAction] = useState<"add" | "recommend" | "profile" | "visit">();
   const [showSavedRestaurants, setShowSavedRestaurants] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
 
   useEffect(() => {
     api.getProfile().then((next) => {
@@ -115,6 +117,32 @@ export function App() {
           <div className="brand"><Radar size={24} /> Date Night Radar</div>
           <h1>Where should we go tonight?</h1>
         </div>
+        <div className="profile-menu">
+          <button
+            type="button"
+            className="profile-button"
+            aria-haspopup="menu"
+            aria-expanded={showProfileMenu}
+            onClick={() => setShowProfileMenu((current) => !current)}
+          >
+            <UserCircle size={22} />
+            <span>{profile?.name || "Profile"}</span>
+          </button>
+          {showProfileMenu && (
+            <div className="profile-menu-popover" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setShowPreferences(true);
+                  setShowProfileMenu(false);
+                }}
+              >
+                Preferences
+              </button>
+            </div>
+          )}
+        </div>
         <div className="quick-panel">
           <label className="field">
             <span>Area</span>
@@ -173,9 +201,12 @@ export function App() {
           <button className="primary" disabled={!visitRestaurantId || busyAction === "visit"} onClick={() => markVisited(visitRestaurantId)}><Save size={18} /> {busyAction === "visit" ? "Saving..." : "Would go back"}</button>
         </div>
 
-        {profile && (
+        {profile && showPreferences && (
           <div className="panel profile-panel">
-            <h2>Preferences</h2>
+            <div className="panel-heading">
+              <h2>Preferences</h2>
+              <button type="button" className="text-link" onClick={() => setShowPreferences(false)}>Close</button>
+            </div>
             <label className="field"><span>Name</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label>
             <label className="field"><span>Home area</span><input value={profile.homeArea} onChange={(event) => setProfile({ ...profile, homeArea: event.target.value })} /></label>
             <ChipInput label="Favorite cuisines" options={cuisines} value={profile.favoriteCuisines} onChange={(favoriteCuisines) => setProfile({ ...profile, favoriteCuisines })} />

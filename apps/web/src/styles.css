@@ -24,6 +24,7 @@ main {
 }
 
 .hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(260px, 0.85fr) minmax(320px, 1.15fr);
   gap: 32px;
@@ -40,6 +41,55 @@ main {
   align-items: center;
   gap: 10px;
   font-weight: 700;
+}
+
+.profile-menu {
+  position: absolute;
+  top: 18px;
+  right: clamp(20px, 5vw, 72px);
+  z-index: 2;
+}
+
+.profile-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #17211c;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.profile-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  border: 1px solid rgba(23, 33, 28, 0.14);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 16px 36px rgba(19, 26, 22, 0.18);
+  padding: 6px;
+}
+
+.profile-menu-popover button {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: white;
+  color: #17211c;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-menu-popover button:hover {
+  background: #edf8f1;
 }
 
 h1 {
@@ -265,6 +315,13 @@ ul {
 
 .profile-panel {
   grid-column: 1 / -1;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .saved-list {
