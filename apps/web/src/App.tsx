@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Radar, Save, UserCircle } from "lucide-react";
+import { Pencil, Plus, Radar, Save, ShieldCheck, UserCircle } from "lucide-react";
 import { api, Recommendation, Restaurant, UserProfile } from "./api/client";
 import { ChipInput } from "./components/ChipInput";
 import { RecommendationCard } from "./components/RecommendationCard";
@@ -21,6 +21,10 @@ export function App() {
   const [showSavedRestaurants, setShowSavedRestaurants] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showRestaurantEditor, setShowRestaurantEditor] = useState(false);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [editingRestaurants, setEditingRestaurants] = useState<Record<string, Partial<Restaurant>>>({});
 
   useEffect(() => {
     api.getProfile().then((next) => {
@@ -110,6 +114,40 @@ export function App() {
     }
   }
 
+  async function saveRestaurantEdit(restaurantId: string) {
+    const current = editingRestaurants[restaurantId];
+    if (!current) return;
+    setBusyAction("add");
+    setStatus(undefined);
+    try {
+      const updated = await api.updateRestaurant(restaurantId, {
+        ...current,
+        area: formatRestaurantArea(current.city ?? "", current.state ?? "")
+      });
+      setRestaurants((items) => items.map((restaurant) => restaurant.restaurantId === restaurantId ? updated : restaurant));
+      setEditingRestaurants(({ [restaurantId]: _saved, ...rest }) => rest);
+      setStatus({ tone: "success", message: `Updated ${updated.name}.` });
+    } catch (error) {
+      setStatus({ tone: "error", message: messageFromError(error) });
+    } finally {
+      setBusyAction(undefined);
+    }
+  }
+
+  const filteredAdminRestaurants = restaurants.filter((restaurant) => {
+    const query = adminSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      restaurant.name,
+      restaurant.area,
+      restaurant.city,
+      restaurant.state,
+      restaurant.zipCode,
+      restaurant.cuisineCategories.join(" "),
+      restaurant.priceLevel
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
+  });
+
   return (
     <main>
       <section className="hero">
@@ -135,10 +173,22 @@ export function App() {
                 role="menuitem"
                 onClick={() => {
                   setShowPreferences(true);
+                  setShowAdminPanel(false);
                   setShowProfileMenu(false);
                 }}
               >
                 Preferences
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setShowAdminPanel(true);
+                  setShowPreferences(false);
+                  setShowProfileMenu(false);
+                }}
+              >
+                Admin Panel
               </button>
             </div>
           )}
@@ -237,9 +287,70 @@ export function App() {
             )}
           </div>
         )}
+
+        {showAdminPanel && (
+          <div className="panel admin-panel">
+            <div className="panel-heading">
+              <div className="panel-title">
+                <ShieldCheck size={22} />
+                <h2>Admin Panel</h2>
+              </div>
+              <button type="button" className="text-link" onClick={() => setShowAdminPanel(false)}>Close</button>
+            </div>
+            <button type="button" className="secondary-action" onClick={() => setShowRestaurantEditor((current) => !current)}>
+              <Pencil size={18} />
+              {showRestaurantEditor ? "Hide Edit Restaurants" : "Edit Restaurants"}
+            </button>
+            {showRestaurantEditor && (
+              <section className="admin-editor" aria-label="Edit restaurants">
+                <label className="field">
+                  <span>Search inventory</span>
+                  <input value={adminSearch} onChange={(event) => setAdminSearch(event.target.value)} />
+                </label>
+                <div className="admin-table" role="table" aria-label="Restaurant inventory">
+                  <div className="admin-row admin-header" role="row">
+                    <span>Name</span>
+                    <span>City</span>
+                    <span>State</span>
+                    <span>ZIP</span>
+                    <span>Cuisine</span>
+                    <span>Price</span>
+                    <span>Actions</span>
+                  </div>
+                  {filteredAdminRestaurants.map((restaurant) => {
+                    const draft = editingRestaurants[restaurant.restaurantId] ?? restaurant;
+                    return (
+                      <div className="admin-row" role="row" key={restaurant.restaurantId}>
+                        <input aria-label={`${restaurant.name} name`} value={draft.name ?? ""} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { name: event.target.value })} />
+                        <input aria-label={`${restaurant.name} city`} value={draft.city ?? ""} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { city: event.target.value })} />
+                        <input aria-label={`${restaurant.name} state`} maxLength={2} value={draft.state ?? ""} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { state: event.target.value.toUpperCase() })} />
+                        <input aria-label={`${restaurant.name} ZIP`} inputMode="numeric" value={draft.zipCode ?? ""} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { zipCode: event.target.value })} />
+                        <input aria-label={`${restaurant.name} cuisines`} value={(draft.cuisineCategories ?? []).join(", ")} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { cuisineCategories: splitCsv(event.target.value) })} />
+                        <select aria-label={`${restaurant.name} price`} value={draft.priceLevel ?? "$$"} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { priceLevel: event.target.value })}>
+                          {prices.map((price) => <option key={price}>{price}</option>)}
+                        </select>
+                        <button className="secondary-action compact-action" disabled={!editingRestaurants[restaurant.restaurantId] || busyAction === "add"} onClick={() => saveRestaurantEdit(restaurant.restaurantId)}>Save</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {!filteredAdminRestaurants.length && <p className="empty">No restaurants match that search.</p>}
+              </section>
+            )}
+          </div>
+        )}
       </section>
     </main>
   );
+
+  function setRestaurantDraft(restaurantId: string, patch: Partial<Restaurant>) {
+    const restaurant = restaurants.find((item) => item.restaurantId === restaurantId);
+    if (!restaurant) return;
+    setEditingRestaurants((current) => ({
+      ...current,
+      [restaurantId]: { ...restaurant, ...current[restaurantId], ...patch }
+    }));
+  }
 }
 
 function messageFromError(error: unknown) {
@@ -255,4 +366,8 @@ function formatRestaurantArea(city: string, state: string) {
 function displayRestaurantLocation(restaurant: Restaurant) {
   const cityState = formatRestaurantArea(restaurant.city ?? "", restaurant.state ?? "");
   return [cityState || restaurant.area, restaurant.zipCode].filter(Boolean).join(" ");
+}
+
+function splitCsv(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
