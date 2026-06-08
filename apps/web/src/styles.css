@@ -267,10 +267,6 @@ ul {
   grid-column: 1 / -1;
 }
 
-.restaurant-list {
-  grid-column: 1 / -1;
-}
-
 .saved-list {
   display: grid;
   gap: 10px;
@@ -292,6 +288,33 @@ ul {
 .empty {
   margin: 0;
   color: #5d6a63;
+}
+
+.profile-links {
+  border-top: 1px solid #e1e7e3;
+  padding-top: 6px;
+}
+
+.text-link {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2f6b4f;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.saved-restaurants-panel {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #e1e7e3;
+  padding-top: 14px;
+}
+
+.saved-restaurants-panel h3 {
+  font-size: 18px;
 }
 
 @media (max-width: 900px) {
