@@ -42,6 +42,6 @@ function corsHeaders() {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "content-type,authorization",
-    "access-control-allow-methods": "GET,PUT,POST,OPTIONS"
+    "access-control-allow-methods": "GET,PUT,POST,DELETE,OPTIONS"
   };
 }

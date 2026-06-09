@@ -368,9 +368,9 @@ ul {
 
 .admin-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) minmax(140px, 1fr) 78px 100px minmax(180px, 1.1fr) 96px 90px;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(140px, 0.9fr) 78px 100px minmax(180px, 1fr) minmax(190px, 1.1fr) 96px minmax(190px, auto);
   gap: 8px;
-  min-width: 980px;
+  min-width: 1220px;
   align-items: center;
 }
 
@@ -388,6 +388,21 @@ ul {
 
 .compact-action {
   width: 100%;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.danger-action {
+  border-color: #e6a08d;
+  color: #8d321f;
+}
+
+.danger-action.confirming {
+  background: #8d321f;
+  color: white;
 }
 
 .saved-list {

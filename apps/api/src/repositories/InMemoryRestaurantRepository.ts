@@ -39,6 +39,10 @@ export class InMemoryRestaurantRepository implements RestaurantRepository {
     return restaurant;
   }
 
+  async deleteRestaurant(restaurantId: string) {
+    this.restaurants.delete(restaurantId);
+  }
+
   async getUserRestaurantState(userId: string, restaurantId: string) {
     return this.states.get(`${userId}:${restaurantId}`);
   }

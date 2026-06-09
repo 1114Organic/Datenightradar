@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import type { RecommendationRequest, Restaurant, UserProfile, UserRestaurantState, Visit } from "../models/types.js";
 import type { RestaurantRepository } from "./RestaurantRepository.js";
 import { normalizeKey } from "../utils/normalize.js";
@@ -55,6 +55,24 @@ export class DynamoRestaurantRepository implements RestaurantRepository {
       await this.doc.send(new PutCommand({ TableName: this.tableName, Item: { ...restaurant, PK: `CUISINE#${normalizeKey(cuisine)}`, SK: `RESTAURANT#${restaurant.restaurantId}`, entityType: "CuisineRestaurantIndex" } }));
     }
     return restaurant;
+  }
+
+  async deleteRestaurant(restaurantId: string) {
+    const indexItems = await this.doc.send(new ScanCommand({
+      TableName: this.tableName,
+      FilterExpression: "restaurantId = :restaurantId AND entityType IN (:areaType, :cuisineType)",
+      ExpressionAttributeValues: {
+        ":restaurantId": restaurantId,
+        ":areaType": "AreaRestaurantIndex",
+        ":cuisineType": "CuisineRestaurantIndex"
+      },
+      ProjectionExpression: "PK, SK"
+    }));
+    await Promise.all((indexItems.Items ?? []).map((item) => this.doc.send(new DeleteCommand({
+      TableName: this.tableName,
+      Key: { PK: item.PK, SK: item.SK }
+    }))));
+    await this.doc.send(new DeleteCommand({ TableName: this.tableName, Key: { PK: `RESTAURANT#${restaurantId}`, SK: "METADATA" } }));
   }
 
   async getUserRestaurantState(userId: string, restaurantId: string) {

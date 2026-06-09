@@ -19,6 +19,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     if (method === "GET" && path === "/restaurants") return json(await service.listRestaurants(query));
     if (method === "GET" && path.startsWith("/restaurants/")) return json(await service.getRestaurant(path.split("/")[2]));
     if (method === "PUT" && path.startsWith("/restaurants/")) return json(await service.updateRestaurant(path.split("/")[2], body));
+    if (method === "DELETE" && path.startsWith("/restaurants/")) return json(await service.deleteRestaurant(path.split("/")[2]));
 
     if (method === "GET" && path === "/search/restaurants") return json(await service.searchRestaurants(query));
 
@@ -69,6 +70,6 @@ function corsHeaders() {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "content-type,authorization",
-    "access-control-allow-methods": "GET,PUT,POST,OPTIONS"
+    "access-control-allow-methods": "GET,PUT,POST,DELETE,OPTIONS"
   };
 }

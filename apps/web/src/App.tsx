@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Radar, Save, ShieldCheck, UserCircle } from "lucide-react";
+import { Pencil, Plus, Radar, Save, ShieldCheck, Trash2, UserCircle } from "lucide-react";
 import { api, Recommendation, Restaurant, UserProfile } from "./api/client";
 import { ChipInput } from "./components/ChipInput";
 import { RecommendationCard } from "./components/RecommendationCard";
@@ -25,6 +25,7 @@ export function App() {
   const [showRestaurantEditor, setShowRestaurantEditor] = useState(false);
   const [adminSearch, setAdminSearch] = useState("");
   const [editingRestaurants, setEditingRestaurants] = useState<Record<string, Partial<Restaurant>>>({});
+  const [confirmDeleteRestaurantId, setConfirmDeleteRestaurantId] = useState<string>();
 
   useEffect(() => {
     api.getProfile().then((next) => {
@@ -134,6 +135,29 @@ export function App() {
     }
   }
 
+  async function deleteRestaurant(restaurantId: string) {
+    const restaurant = restaurants.find((item) => item.restaurantId === restaurantId);
+    if (!restaurant) return;
+    if (confirmDeleteRestaurantId !== restaurantId) {
+      setConfirmDeleteRestaurantId(restaurantId);
+      setStatus({ tone: "info", message: `Click Delete again to remove ${restaurant.name}.` });
+      return;
+    }
+    setBusyAction("add");
+    setStatus(undefined);
+    try {
+      await api.deleteRestaurant(restaurantId);
+      setRestaurants((items) => items.filter((item) => item.restaurantId !== restaurantId));
+      setEditingRestaurants(({ [restaurantId]: _deleted, ...rest }) => rest);
+      setConfirmDeleteRestaurantId(undefined);
+      setStatus({ tone: "success", message: `Deleted ${restaurant.name}.` });
+    } catch (error) {
+      setStatus({ tone: "error", message: messageFromError(error) });
+    } finally {
+      setBusyAction(undefined);
+    }
+  }
+
   const filteredAdminRestaurants = restaurants.filter((restaurant) => {
     const query = adminSearch.trim().toLowerCase();
     if (!query) return true;
@@ -144,6 +168,7 @@ export function App() {
       restaurant.state,
       restaurant.zipCode,
       restaurant.cuisineCategories.join(" "),
+      restaurant.tags.join(" "),
       restaurant.priceLevel
     ].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
   });
@@ -314,6 +339,7 @@ export function App() {
                     <span>State</span>
                     <span>ZIP</span>
                     <span>Cuisine</span>
+                    <span>Tags</span>
                     <span>Price</span>
                     <span>Actions</span>
                   </div>
@@ -326,10 +352,22 @@ export function App() {
                         <input aria-label={`${restaurant.name} state`} maxLength={2} value={draft.state ?? ""} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { state: event.target.value.toUpperCase() })} />
                         <input aria-label={`${restaurant.name} ZIP`} inputMode="numeric" value={draft.zipCode ?? ""} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { zipCode: event.target.value })} />
                         <input aria-label={`${restaurant.name} cuisines`} value={(draft.cuisineCategories ?? []).join(", ")} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { cuisineCategories: splitCsv(event.target.value) })} />
+                        <input aria-label={`${restaurant.name} tags`} value={(draft.tags ?? []).join(", ")} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { tags: splitCsv(event.target.value) })} />
                         <select aria-label={`${restaurant.name} price`} value={draft.priceLevel ?? "$$"} onChange={(event) => setRestaurantDraft(restaurant.restaurantId, { priceLevel: event.target.value })}>
                           {prices.map((price) => <option key={price}>{price}</option>)}
                         </select>
-                        <button className="secondary-action compact-action" disabled={!editingRestaurants[restaurant.restaurantId] || busyAction === "add"} onClick={() => saveRestaurantEdit(restaurant.restaurantId)}>Save</button>
+                        <div className="admin-actions">
+                          <button className="secondary-action compact-action" disabled={!editingRestaurants[restaurant.restaurantId] || busyAction === "add"} onClick={() => saveRestaurantEdit(restaurant.restaurantId)}>Save</button>
+                          <button
+                            className={`secondary-action compact-action danger-action${confirmDeleteRestaurantId === restaurant.restaurantId ? " confirming" : ""}`}
+                            disabled={busyAction === "add"}
+                            onClick={() => deleteRestaurant(restaurant.restaurantId)}
+                            aria-label={`${confirmDeleteRestaurantId === restaurant.restaurantId ? "Confirm delete" : "Delete"} ${restaurant.name}`}
+                          >
+                            <Trash2 size={16} />
+                            {confirmDeleteRestaurantId === restaurant.restaurantId ? "Confirm" : "Delete"}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
