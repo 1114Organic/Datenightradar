@@ -71,7 +71,7 @@ export class RestaurantRadarStack extends Stack {
     const httpApi = new HttpApi(this, "HttpApi", {
       corsPreflight: {
         allowHeaders: ["content-type", "authorization"],
-        allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.PUT, CorsHttpMethod.POST, CorsHttpMethod.OPTIONS],
+        allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.PUT, CorsHttpMethod.POST, CorsHttpMethod.DELETE, CorsHttpMethod.OPTIONS],
         allowOrigins: ["*"]
       }
     });

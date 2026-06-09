@@ -6,6 +6,7 @@ export interface RestaurantRepository {
   listRestaurants(filters?: { area?: string; cuisine?: string; priceLevel?: string; tag?: string }): Promise<Restaurant[]>;
   getRestaurant(restaurantId: string): Promise<Restaurant | undefined>;
   putRestaurant(restaurant: Restaurant): Promise<Restaurant>;
+  deleteRestaurant(restaurantId: string): Promise<void>;
   getUserRestaurantState(userId: string, restaurantId: string): Promise<UserRestaurantState | undefined>;
   putUserRestaurantState(state: UserRestaurantState): Promise<UserRestaurantState>;
   listUserRestaurantStates(userId: string, status?: string): Promise<UserRestaurantState[]>;

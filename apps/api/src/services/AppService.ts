@@ -83,6 +83,13 @@ export class AppService {
     return this.repo.getRestaurant(restaurantId);
   }
 
+  async deleteRestaurant(restaurantId: string) {
+    const current = await this.repo.getRestaurant(restaurantId);
+    if (!current) throw new Error("restaurant not found");
+    await this.repo.deleteRestaurant(restaurantId);
+    return { restaurantId };
+  }
+
   async searchRestaurants(input: { query?: string; area?: string; latitude?: number | string; longitude?: number | string; radiusMiles?: number | string }) {
     const cached = await this.repo.listRestaurants({ area: input.area });
     const matching = cached.filter((restaurant) => !input.query || restaurant.name.toLowerCase().includes(input.query.toLowerCase()));

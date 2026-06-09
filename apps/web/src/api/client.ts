@@ -53,6 +53,7 @@ export const api = {
   listRestaurants: () => request<Restaurant[]>("/restaurants"),
   createRestaurant: (restaurant: Partial<Restaurant>) => request<Restaurant>("/restaurants", { method: "POST", body: restaurant }),
   updateRestaurant: (restaurantId: string, restaurant: Partial<Restaurant>) => request<Restaurant>(`/restaurants/${restaurantId}`, { method: "PUT", body: restaurant }),
+  deleteRestaurant: (restaurantId: string) => request<{ restaurantId: string }>(`/restaurants/${restaurantId}`, { method: "DELETE" }),
   saveWantToTry: (restaurantId: string) => request(`/users/me/restaurants/${restaurantId}/want-to-try`, { method: "POST" }),
   archive: (restaurantId: string) => request(`/users/me/restaurants/${restaurantId}/archive`, { method: "POST" }),
   createVisit: (visit: unknown) => request("/visits", { method: "POST", body: visit }),
