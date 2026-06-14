@@ -292,6 +292,33 @@ select {
   color: #5d6a63;
 }
 
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.resource-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #cfd8d3;
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: white;
+  color: #17211c;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.resource-links a:hover,
+.resource-links a:focus-visible {
+  border-color: #2f6b4f;
+  color: #2f6b4f;
+}
+
 ul {
   margin: 0;
   padding-left: 20px;
@@ -312,6 +339,13 @@ ul {
   border-radius: 6px;
   background: white;
   color: #17211c;
+  cursor: pointer;
+}
+
+.actions button:hover,
+.actions button:focus-visible {
+  border-color: #2f6b4f;
+  color: #2f6b4f;
 }
 
 .workspace-grid {
