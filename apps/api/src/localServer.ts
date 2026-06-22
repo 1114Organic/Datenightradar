@@ -30,6 +30,11 @@ const server = createServer(async (req, res) => {
   } as APIGatewayProxyEventV2;
 
   const response = await handler(event);
+  if (!response) {
+    res.writeHead(204, corsHeaders());
+    res.end();
+    return;
+  }
   res.writeHead(response.statusCode ?? 200, { ...corsHeaders(), ...(response.headers as Record<string, string>) });
   res.end(response.body);
 });

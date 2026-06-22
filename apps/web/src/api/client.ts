@@ -23,6 +23,18 @@ export interface Restaurant {
   tags: string[];
 }
 
+export interface RestaurantImportTarget {
+  type: string;
+  value: string;
+}
+
+export interface RestaurantImportResult {
+  importedCount: number;
+  skippedCount: number;
+  targets: RestaurantImportTarget[];
+  restaurants: Restaurant[];
+}
+
 export interface Recommendation {
   category: string;
   restaurantId: string;
@@ -54,6 +66,7 @@ export const api = {
   createRestaurant: (restaurant: Partial<Restaurant>) => request<Restaurant>("/restaurants", { method: "POST", body: restaurant }),
   updateRestaurant: (restaurantId: string, restaurant: Partial<Restaurant>) => request<Restaurant>(`/restaurants/${restaurantId}`, { method: "PUT", body: restaurant }),
   deleteRestaurant: (restaurantId: string) => request<{ restaurantId: string }>(`/restaurants/${restaurantId}`, { method: "DELETE" }),
+  importRestaurants: (targets: RestaurantImportTarget[]) => request<RestaurantImportResult>("/admin/import/restaurants", { method: "POST", body: { targets } }),
   saveWantToTry: (restaurantId: string) => request(`/users/me/restaurants/${restaurantId}/want-to-try`, { method: "POST" }),
   archive: (restaurantId: string) => request(`/users/me/restaurants/${restaurantId}/archive`, { method: "POST" }),
   createVisit: (visit: unknown) => request("/visits", { method: "POST", body: visit }),

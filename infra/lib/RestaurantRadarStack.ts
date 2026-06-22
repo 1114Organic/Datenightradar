@@ -5,6 +5,8 @@ import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import { Rule, RuleTargetInput, Schedule } from "aws-cdk-lib/aws-events";
+import { LambdaFunction } from "aws-cdk-lib/aws-events-targets";
 import { CorsHttpMethod, HttpApi, HttpMethod } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -67,6 +69,17 @@ export class RestaurantRadarStack extends Stack {
     });
 
     table.grantReadWriteData(apiFunction);
+
+    new Rule(this, "WeeklyRestaurantImportRule", {
+      schedule: Schedule.cron({ minute: "0", hour: "9", weekDay: "SUN" }),
+      targets: [new LambdaFunction(apiFunction, {
+        event: RuleTargetInput.fromObject({
+          source: "restaurant-radar.scheduler",
+          detailType: "WeeklyRestaurantImport",
+          detail: {}
+        })
+      })]
+    });
 
     const httpApi = new HttpApi(this, "HttpApi", {
       corsPreflight: {
