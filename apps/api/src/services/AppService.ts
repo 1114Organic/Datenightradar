@@ -104,6 +104,28 @@ export class AppService {
     return Promise.all(normalized.map((restaurant) => this.createRestaurant(restaurant)));
   }
 
+  async importAreaRestaurants(input: { targets?: { type?: string; value?: string }[] } = {}) {
+    const targets = input.targets?.filter((target) => target.value?.trim()).length
+      ? input.targets.filter((target) => target.value?.trim())
+      : defaultImportTargets;
+    const imported: Restaurant[] = [];
+    const skipped: string[] = [];
+    for (const target of targets) {
+      const area = target.value!.trim();
+      const results = await this.searchProvider.searchRestaurants({ area, query: target.type ?? "area" });
+      for (const restaurant of results) {
+        const restaurantId = restaurant.restaurantId ?? `import-${normalizeImportId(restaurant.name, restaurant.area)}`;
+        if (await this.repo.getRestaurant(restaurantId)) {
+          skipped.push(restaurant.name);
+          continue;
+        }
+        imported.push(await this.createRestaurant({ ...restaurant, restaurantId }));
+      }
+    }
+    console.log("restaurant_import", { targetCount: targets.length, importedCount: imported.length, skippedCount: skipped.length });
+    return { importedCount: imported.length, skippedCount: skipped.length, targets, restaurants: imported };
+  }
+
   async markRestaurant(userId: string, restaurantId: string, status: RestaurantStatus) {
     const current = await this.repo.getUserRestaurantState(userId, restaurantId);
     const timestamp = nowIso();
@@ -171,6 +193,14 @@ export class AppService {
   }
 }
 
+const defaultImportTargets = [
+  { type: "city", value: "Charleston, SC" },
+  { type: "city", value: "North Charleston, SC" },
+  { type: "city", value: "Mount Pleasant, SC" },
+  { type: "city", value: "James Island, SC" },
+  { type: "city", value: "Johns Island, SC" }
+];
+
 function required(value: string | undefined, field: string): string {
   if (!value?.trim()) throw new Error(`${field} is required`);
   return value.trim();
@@ -186,4 +216,8 @@ function formatArea(city?: string, state?: string): string | undefined {
   const cleanedState = cleanOptional(state)?.toUpperCase();
   if (cleanedCity && cleanedState) return `${cleanedCity}, ${cleanedState}`;
   return cleanedCity ?? cleanedState;
+}
+
+function normalizeImportId(name: string, area: string) {
+  return `${name}-${area}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }

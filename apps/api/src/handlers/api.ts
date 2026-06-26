@@ -1,16 +1,22 @@
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
+import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2, ScheduledEvent } from "aws-lambda";
 import { createAppService } from "../services/factory.js";
 
-export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2> {
+export async function handler(event: APIGatewayProxyEventV2 | ScheduledEvent): Promise<APIGatewayProxyStructuredResultV2 | void> {
   try {
-    const method = event.requestContext.http.method;
+    if (isRestaurantImportSchedule(event)) {
+      await createAppService().importAreaRestaurants();
+      return;
+    }
+
+    const apiEvent = event as APIGatewayProxyEventV2;
+    const method = apiEvent.requestContext.http.method;
     if (method === "OPTIONS") return empty(204);
 
-    const userId = currentUserId(event);
+    const userId = currentUserId(apiEvent);
     const service = createAppService();
-    const path = event.rawPath.replace(/^\/api/, "") || "/";
-    const body = event.body ? JSON.parse(event.body) : {};
-    const query = event.queryStringParameters ?? {};
+    const path = apiEvent.rawPath.replace(/^\/api/, "") || "/";
+    const body = apiEvent.body ? JSON.parse(apiEvent.body) : {};
+    const query = apiEvent.queryStringParameters ?? {};
 
     if (method === "GET" && path === "/users/me") return json(await service.getProfile(userId));
     if (method === "PUT" && path === "/users/me") return json(await service.putProfile(userId, body));
@@ -22,6 +28,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     if (method === "DELETE" && path.startsWith("/restaurants/")) return json(await service.deleteRestaurant(path.split("/")[2]));
 
     if (method === "GET" && path === "/search/restaurants") return json(await service.searchRestaurants(query));
+    if (method === "POST" && path === "/admin/import/restaurants") return json(await service.importAreaRestaurants(body), 201);
 
     const wantToTry = path.match(/^\/users\/me\/restaurants\/([^/]+)\/want-to-try$/);
     if (method === "POST" && wantToTry) return json(await service.markRestaurant(userId, wantToTry[1], "want_to_try"));
@@ -38,9 +45,14 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
     return json({ message: "Not found" }, 404);
   } catch (error) {
-    console.error("api_error", { message: error instanceof Error ? error.message : String(error), requestId: event.requestContext.requestId });
+    const requestId = "requestContext" in event ? event.requestContext.requestId : event.id;
+    console.error("api_error", { message: error instanceof Error ? error.message : String(error), requestId });
     return json({ message: error instanceof Error ? error.message : "Unexpected error" }, 400);
   }
+}
+
+function isRestaurantImportSchedule(event: APIGatewayProxyEventV2 | ScheduledEvent): event is ScheduledEvent {
+  return "source" in event && event.source === "restaurant-radar.scheduler";
 }
 
 function currentUserId(event: APIGatewayProxyEventV2): string {

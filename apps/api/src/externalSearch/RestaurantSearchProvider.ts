@@ -9,6 +9,7 @@ export interface RestaurantSearchInput {
 }
 
 export type NormalizedRestaurant = Omit<Restaurant, "entityType" | "restaurantId" | "createdAt" | "updatedAt"> & {
+  restaurantId?: string;
   externalIds?: Record<string, string>;
 };
 

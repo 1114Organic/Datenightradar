@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Radar, Save, ShieldCheck, Trash2, UserCircle } from "lucide-react";
-import { api, Recommendation, Restaurant, UserProfile } from "./api/client";
+import { Download, Pencil, Plus, Radar, Save, ShieldCheck, Trash2, UserCircle } from "lucide-react";
+import { api, Recommendation, Restaurant, RestaurantImportTarget, UserProfile } from "./api/client";
 import { ChipInput } from "./components/ChipInput";
 import { RecommendationCard } from "./components/RecommendationCard";
 
@@ -8,6 +8,13 @@ const cuisines = ["Italian", "Mexican", "Thai", "Indian", "American", "Japanese"
 const tags = ["date-night", "casual", "outdoor-seating", "brunch", "cocktails", "quiet", "upscale", "quick-bite", "good-parking", "worth-the-drive"];
 const prices = ["$", "$$", "$$$", "$$$$"];
 const defaultArea = "Charleston, SC";
+const defaultImportTargets: RestaurantImportTarget[] = [
+  { type: "city", value: "Charleston, SC" },
+  { type: "city", value: "North Charleston, SC" },
+  { type: "city", value: "Mount Pleasant, SC" },
+  { type: "city", value: "James Island, SC" },
+  { type: "city", value: "Johns Island, SC" }
+];
 
 export function App() {
   const [profile, setProfile] = useState<UserProfile>();
@@ -17,7 +24,7 @@ export function App() {
   const [newRestaurant, setNewRestaurant] = useState({ name: "", city: "Charleston", state: "SC", zipCode: "", cuisineCategories: ["Thai"], priceLevel: "$$", tags: ["date-night"] });
   const [visitRestaurantId, setVisitRestaurantId] = useState("");
   const [status, setStatus] = useState<{ tone: "success" | "error" | "info"; message: string }>();
-  const [busyAction, setBusyAction] = useState<"add" | "recommend" | "profile" | "visit">();
+  const [busyAction, setBusyAction] = useState<"add" | "recommend" | "profile" | "visit" | "import">();
   const [showSavedRestaurants, setShowSavedRestaurants] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
@@ -26,6 +33,8 @@ export function App() {
   const [adminSearch, setAdminSearch] = useState("");
   const [editingRestaurants, setEditingRestaurants] = useState<Record<string, Partial<Restaurant>>>({});
   const [confirmDeleteRestaurantId, setConfirmDeleteRestaurantId] = useState<string>();
+  const [importTargets, setImportTargets] = useState<RestaurantImportTarget[]>(defaultImportTargets);
+  const [newImportTarget, setNewImportTarget] = useState<RestaurantImportTarget>({ type: "zip", value: "" });
 
   useEffect(() => {
     api.getProfile().then((next) => {
@@ -156,6 +165,29 @@ export function App() {
     } finally {
       setBusyAction(undefined);
     }
+  }
+
+  async function importAreaRestaurants() {
+    setBusyAction("import");
+    setStatus(undefined);
+    try {
+      const result = await api.importRestaurants(importTargets);
+      await refreshRestaurants();
+      setStatus({
+        tone: "success",
+        message: `Imported ${result.importedCount} restaurant${result.importedCount === 1 ? "" : "s"} and skipped ${result.skippedCount} existing entr${result.skippedCount === 1 ? "y" : "ies"}.`
+      });
+    } catch (error) {
+      setStatus({ tone: "error", message: messageFromError(error) });
+    } finally {
+      setBusyAction(undefined);
+    }
+  }
+
+  function addImportTarget() {
+    if (!newImportTarget.value.trim()) return;
+    setImportTargets((current) => [...current, { ...newImportTarget, value: newImportTarget.value.trim() }]);
+    setNewImportTarget({ ...newImportTarget, value: "" });
   }
 
   const filteredAdminRestaurants = restaurants.filter((restaurant) => {
@@ -326,6 +358,44 @@ export function App() {
               <Pencil size={18} />
               {showRestaurantEditor ? "Hide Edit Restaurants" : "Edit Restaurants"}
             </button>
+            <section className="admin-import" aria-label="Restaurant import">
+              <div className="panel-heading">
+                <div>
+                  <h3>Area Restaurant Import</h3>
+                  <p className="muted">Seed Charleston County restaurants now; the same targets run weekly in AWS.</p>
+                </div>
+                <button type="button" className="secondary-action" disabled={busyAction === "import" || !importTargets.length} onClick={importAreaRestaurants}>
+                  <Download size={18} />
+                  {busyAction === "import" ? "Pulling..." : "Pull Restaurants"}
+                </button>
+              </div>
+              <div className="import-targets" aria-label="Import targets">
+                {importTargets.map((target, index) => (
+                  <span className="target-pill" key={`${target.type}-${target.value}`}>
+                    {target.type}: {target.value}
+                    <button type="button" aria-label={`Remove ${target.value}`} onClick={() => setImportTargets((current) => current.filter((_, itemIndex) => itemIndex !== index))}>x</button>
+                  </span>
+                ))}
+              </div>
+              <div className="import-target-form">
+                <label className="field">
+                  <span>Target type</span>
+                  <select value={newImportTarget.type} onChange={(event) => setNewImportTarget({ ...newImportTarget, type: event.target.value })}>
+                    <option value="city">City</option>
+                    <option value="county">County</option>
+                    <option value="zip">ZIP</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>County, city, or ZIP</span>
+                  <input value={newImportTarget.value} onChange={(event) => setNewImportTarget({ ...newImportTarget, value: event.target.value })} placeholder="Charleston County, SC or 29412" />
+                </label>
+                <button type="button" className="secondary-action" onClick={addImportTarget}>
+                  <Plus size={18} />
+                  Add Target
+                </button>
+              </div>
+            </section>
             {showRestaurantEditor && (
               <section className="admin-editor" aria-label="Edit restaurants">
                 <label className="field">
