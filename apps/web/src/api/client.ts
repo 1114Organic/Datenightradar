@@ -1,4 +1,10 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api";
+let apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api";
+let authToken: string | undefined;
+
+export function configureApi(input: { apiBaseUrl?: string; authToken?: string }) {
+  apiBaseUrl = input.apiBaseUrl ?? apiBaseUrl;
+  authToken = input.authToken;
+}
 
 export interface RecommendationRequest {
   area: string;
@@ -35,6 +41,28 @@ export interface RestaurantImportResult {
   restaurants: Restaurant[];
 }
 
+export interface UserRestaurantState {
+  userId: string;
+  restaurantId: string;
+  status: "want_to_try" | "visited" | "archived";
+  personalTags: string[];
+  lastVisitDate?: string;
+  bestRating?: string;
+  wouldReturn?: boolean;
+}
+
+export interface Visit {
+  visitId: string;
+  userId: string;
+  restaurantId: string;
+  visitDate: string;
+  occasion: string;
+  rating: string;
+  wouldReturn: boolean;
+  tags: string[];
+  notes?: string;
+}
+
 export interface Recommendation {
   category: string;
   restaurantId: string;
@@ -51,6 +79,9 @@ export interface Recommendation {
 
 export interface UserProfile {
   name: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   homeArea: string;
   favoriteCuisines: string[];
   dislikedCuisines: string[];
@@ -69,15 +100,19 @@ export const api = {
   importRestaurants: (targets: RestaurantImportTarget[]) => request<RestaurantImportResult>("/admin/import/restaurants", { method: "POST", body: { targets } }),
   saveWantToTry: (restaurantId: string) => request(`/users/me/restaurants/${restaurantId}/want-to-try`, { method: "POST" }),
   archive: (restaurantId: string) => request(`/users/me/restaurants/${restaurantId}/archive`, { method: "POST" }),
+  listUserRestaurants: (status?: string) => request<UserRestaurantState[]>(`/users/me/restaurants${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   createVisit: (visit: unknown) => request("/visits", { method: "POST", body: visit }),
+  listVisits: () => request<Visit[]>("/visits"),
   recommendations: (input: RecommendationRequest) => request<{ recommendations: Recommendation[] }>("/recommendations", { method: "POST", body: input })
 };
 
 async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
-  const headers = options.body ? { "content-type": "application/json" } : undefined;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const headers: Record<string, string> = {};
+  if (options.body) headers["content-type"] = "application/json";
+  if (authToken) headers.authorization = `Bearer ${authToken}`;
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     method: options.method ?? "GET",
-    headers,
+    headers: Object.keys(headers).length ? headers : undefined,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
   if (!response.ok) throw new Error(await response.text());

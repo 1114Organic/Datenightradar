@@ -6,6 +6,9 @@ export interface UserProfile {
   entityType: "UserProfile";
   userId: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   homeArea: string;
   favoriteCuisines: string[];
   dislikedCuisines: string[];

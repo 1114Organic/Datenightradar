@@ -68,7 +68,16 @@ npm run cdk -- bootstrap
 npm run cdk -- deploy -c authMode=cognito -c budgetEmail=you@example.com -c monthlyBudgetLimit=10
 ```
 
-The `authMode=cognito` stack protects API routes with a Cognito authorizer. The current frontend still needs a sign-in flow before that mode is usable from the browser.
+The `authMode=cognito` stack protects API routes with a Cognito authorizer and serves a generated `runtime-config.json` so the browser can use the deployed API, Cognito hosted sign-in, sign-up, logout, and password reset flow.
+
+Admin tools are restricted to Cognito users in the `Admin` group. After your first sign-up, add your user to that group in the AWS Cognito console, or run:
+
+```bash
+aws cognito-idp admin-add-user-to-group \
+  --user-pool-id <UserPoolId> \
+  --username <your-email-address> \
+  --group-name Admin
+```
 
 For a temporary private demo only, deploy with:
 
