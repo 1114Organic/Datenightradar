@@ -39,12 +39,7 @@ export class RestaurantRadarStack extends Stack {
       selfSignUpEnabled: true,
       signInAliases: { email: true },
       autoVerify: { email: true },
-      accountRecovery: AccountRecovery.EMAIL_ONLY,
-      standardAttributes: {
-        email: { required: true, mutable: true },
-        givenName: { required: false, mutable: true },
-        familyName: { required: false, mutable: true }
-      }
+      accountRecovery: AccountRecovery.EMAIL_ONLY
     });
 
     const webBucket = new Bucket(this, "WebBucket", {
