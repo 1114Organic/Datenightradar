@@ -10,7 +10,7 @@ import { LambdaFunction } from "aws-cdk-lib/aws-events-targets";
 import { CorsHttpMethod, HttpApi, HttpMethod } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
-import { UserPool } from "aws-cdk-lib/aws-cognito";
+import { AccountRecovery, CfnUserPoolGroup, OAuthScope, UserPool, UserPoolClientIdentityProvider } from "aws-cdk-lib/aws-cognito";
 import { Bucket, BlockPublicAccess } from "aws-cdk-lib/aws-s3";
 import { Distribution, ViewerProtocolPolicy } from "aws-cdk-lib/aws-cloudfront";
 import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
@@ -37,9 +37,54 @@ export class RestaurantRadarStack extends Stack {
 
     const userPool = new UserPool(this, "UserPool", {
       selfSignUpEnabled: true,
-      signInAliases: { email: true }
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+      accountRecovery: AccountRecovery.EMAIL_ONLY,
+      standardAttributes: {
+        email: { required: true, mutable: true },
+        givenName: { required: false, mutable: true },
+        familyName: { required: false, mutable: true }
+      }
     });
-    const userPoolClient = userPool.addClient("WebClient");
+
+    const webBucket = new Bucket(this, "WebBucket", {
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: RemovalPolicy.RETAIN,
+      autoDeleteObjects: false
+    });
+
+    const distribution = new Distribution(this, "WebDistribution", {
+      defaultBehavior: {
+        origin: new S3Origin(webBucket),
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
+      },
+      defaultRootObject: "index.html"
+    });
+
+    const cloudFrontUrl = `https://${distribution.distributionDomainName}`;
+    const localhostUrls = ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"];
+    const userPoolDomainPrefix = this.node.tryGetContext("cognitoDomainPrefix") as string | undefined
+      ?? `date-night-radar-${this.account}`;
+    const userPoolDomain = userPool.addDomain("UserPoolDomain", {
+      cognitoDomain: { domainPrefix: userPoolDomainPrefix }
+    });
+    const cognitoDomainUrl = `https://${userPoolDomain.domainName}.auth.${this.region}.amazoncognito.com`;
+
+    const userPoolClient = userPool.addClient("WebClient", {
+      supportedIdentityProviders: [UserPoolClientIdentityProvider.COGNITO],
+      oAuth: {
+        flows: { authorizationCodeGrant: true },
+        scopes: [OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE],
+        callbackUrls: [cloudFrontUrl, ...localhostUrls],
+        logoutUrls: [cloudFrontUrl, ...localhostUrls]
+      }
+    });
+
+    new CfnUserPoolGroup(this, "AdminGroup", {
+      userPoolId: userPool.userPoolId,
+      groupName: "Admin",
+      description: "Users who can access Date Night Radar admin tools."
+    });
 
     const apiLogGroup = new LogGroup(this, "ApiFunctionLogGroup", {
       retention: RetentionDays.ONE_WEEK,
@@ -100,22 +145,17 @@ export class RestaurantRadarStack extends Stack {
       })
     } : routeOptions);
 
-    const webBucket = new Bucket(this, "WebBucket", {
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: RemovalPolicy.RETAIN,
-      autoDeleteObjects: false
-    });
-
-    const distribution = new Distribution(this, "WebDistribution", {
-      defaultBehavior: {
-        origin: new S3Origin(webBucket),
-        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
-      },
-      defaultRootObject: "index.html"
-    });
-
     new BucketDeployment(this, "WebDeployment", {
-      sources: [Source.asset("../apps/web/dist")],
+      sources: [
+        Source.asset("../apps/web/dist"),
+        Source.jsonData("runtime-config.json", {
+          apiBaseUrl: `${httpApi.apiEndpoint}/api`,
+          authMode,
+          cognitoDomain: cognitoDomainUrl,
+          userPoolClientId: userPoolClient.userPoolClientId,
+          userPoolId: userPool.userPoolId
+        })
+      ],
       destinationBucket: webBucket,
       distribution,
       distributionPaths: ["/*"]
@@ -166,6 +206,7 @@ export class RestaurantRadarStack extends Stack {
     new CfnOutput(this, "ApiUrl", { value: httpApi.apiEndpoint });
     new CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new CfnOutput(this, "UserPoolClientId", { value: userPoolClient.userPoolClientId });
+    new CfnOutput(this, "CognitoDomain", { value: cognitoDomainUrl });
     new CfnOutput(this, "WebBucketName", { value: webBucket.bucketName });
     new CfnOutput(this, "CloudFrontDomainName", { value: distribution.distributionDomainName });
   }

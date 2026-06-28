@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Download, Pencil, Plus, Radar, Save, ShieldCheck, Trash2, UserCircle } from "lucide-react";
-import { api, Recommendation, Restaurant, RestaurantImportTarget, UserProfile } from "./api/client";
+import { Download, KeyRound, LogIn, LogOut, Pencil, Plus, Radar, Save, ShieldCheck, Trash2, UserCircle, X } from "lucide-react";
+import { api, configureApi, Recommendation, Restaurant, RestaurantImportTarget, UserProfile, UserRestaurantState, Visit } from "./api/client";
 import { ChipInput } from "./components/ChipInput";
 import { RecommendationCard } from "./components/RecommendationCard";
+import { AuthSession, beginHostedAuth, clearStoredSession, completeHostedAuth, loadRuntimeConfig, RuntimeConfig, signOut } from "./auth/cognito";
 
 const cuisines = ["Italian", "Mexican", "Thai", "Indian", "American", "Japanese", "Mediterranean"];
 const tags = ["date-night", "casual", "outdoor-seating", "brunch", "cocktails", "quiet", "upscale", "quick-bite", "good-parking", "worth-the-drive"];
@@ -25,9 +26,8 @@ export function App() {
   const [visitRestaurantId, setVisitRestaurantId] = useState("");
   const [status, setStatus] = useState<{ tone: "success" | "error" | "info"; message: string }>();
   const [busyAction, setBusyAction] = useState<"add" | "recommend" | "profile" | "visit" | "import">();
-  const [showSavedRestaurants, setShowSavedRestaurants] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showRestaurantEditor, setShowRestaurantEditor] = useState(false);
   const [adminSearch, setAdminSearch] = useState("");
@@ -35,19 +35,55 @@ export function App() {
   const [confirmDeleteRestaurantId, setConfirmDeleteRestaurantId] = useState<string>();
   const [importTargets, setImportTargets] = useState<RestaurantImportTarget[]>(defaultImportTargets);
   const [newImportTarget, setNewImportTarget] = useState<RestaurantImportTarget>({ type: "zip", value: "" });
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig>();
+  const [authSession, setAuthSession] = useState<AuthSession>();
+  const [authReady, setAuthReady] = useState(false);
+  const [userRestaurantStates, setUserRestaurantStates] = useState<UserRestaurantState[]>([]);
+  const [visits, setVisits] = useState<Visit[]>([]);
 
   useEffect(() => {
-    api.getProfile().then((next) => {
-      const nextProfile = next.homeArea === "Reston" ? { ...next, homeArea: defaultArea } : next;
-      setProfile(nextProfile);
-      setRequest((current) => ({ ...current, area: nextProfile.homeArea || current.area, priceLevels: next.preferredPriceLevels.length ? next.preferredPriceLevels : current.priceLevels }));
-    });
-    refreshRestaurants();
+    async function start() {
+      try {
+        const config = await loadRuntimeConfig();
+        setRuntimeConfig(config);
+        configureApi({ apiBaseUrl: config.apiBaseUrl });
+        const session = config.authMode === "cognito" ? await completeHostedAuth(config) : undefined;
+        setAuthSession(session);
+        configureApi({ apiBaseUrl: config.apiBaseUrl, authToken: session?.idToken });
+        setAuthReady(true);
+        if (config.authMode === "dev" || session) await loadAppData(session);
+      } catch (error) {
+        clearStoredSession();
+        setAuthReady(true);
+        setStatus({ tone: "error", message: messageFromError(error) });
+      }
+    }
+    start();
   }, []);
+
+  async function loadAppData(session?: AuthSession) {
+    const [nextProfile, nextRestaurants, nextStates, nextVisits] = await Promise.all([
+      api.getProfile(),
+      api.listRestaurants(),
+      api.listUserRestaurants(),
+      api.listVisits()
+    ]);
+    const nextProfileWithDefaults = applyProfileDefaults(nextProfile, session);
+    setProfile(nextProfileWithDefaults);
+    setRestaurants(nextRestaurants);
+    setUserRestaurantStates(nextStates);
+    setVisits(nextVisits);
+    setRequest((current) => ({
+      ...current,
+      area: nextProfileWithDefaults.homeArea || current.area,
+      priceLevels: nextProfileWithDefaults.preferredPriceLevels.length ? nextProfileWithDefaults.preferredPriceLevels : current.priceLevels
+    }));
+  }
 
   async function refreshRestaurants() {
     try {
       setRestaurants(await api.listRestaurants());
+      setUserRestaurantStates(await api.listUserRestaurants());
     } catch (error) {
       setStatus({ tone: "error", message: messageFromError(error) });
     }
@@ -77,7 +113,8 @@ export function App() {
     setBusyAction("profile");
     setStatus(undefined);
     try {
-      setProfile(await api.putProfile(profile));
+      const name = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.name;
+      setProfile(await api.putProfile({ ...profile, name }));
       setStatus({ tone: "success", message: "Preferences saved." });
     } catch (error) {
       setStatus({ tone: "error", message: messageFromError(error) });
@@ -116,11 +153,23 @@ export function App() {
       await api.createVisit({ restaurantId, occasion: request.occasion, rating: "liked", wouldReturn: true, tags: [request.occasion], notes: "" });
       const restaurant = restaurants.find((item) => item.restaurantId === restaurantId);
       setVisitRestaurantId("");
+      setUserRestaurantStates(await api.listUserRestaurants());
+      setVisits(await api.listVisits());
       setStatus({ tone: "success", message: restaurant ? `Marked ${restaurant.name} as visited.` : "Marked restaurant as visited." });
     } catch (error) {
       setStatus({ tone: "error", message: messageFromError(error) });
     } finally {
       setBusyAction(undefined);
+    }
+  }
+
+  async function saveWantToTry(restaurantId: string) {
+    try {
+      await api.saveWantToTry(restaurantId);
+      setUserRestaurantStates(await api.listUserRestaurants());
+      setStatus({ tone: "success", message: "Saved to Want to Try." });
+    } catch (error) {
+      setStatus({ tone: "error", message: messageFromError(error) });
     }
   }
 
@@ -205,6 +254,17 @@ export function App() {
     ].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
   });
 
+  const isSignedIn = runtimeConfig?.authMode !== "cognito" || Boolean(authSession);
+  const isAdmin = runtimeConfig?.authMode === "dev" || authSession?.groups.includes("Admin");
+  const displayName = profile?.firstName || profile?.name || authSession?.email || "Profile";
+  const restaurantById = new Map(restaurants.map((restaurant) => [restaurant.restaurantId, restaurant]));
+  const visitCountByRestaurantId = visits.reduce<Record<string, number>>((counts, visit) => ({
+    ...counts,
+    [visit.restaurantId]: (counts[visit.restaurantId] ?? 0) + 1
+  }), {});
+  const heartedRestaurants = userRestaurantStates.filter((state) => state.status === "want_to_try").map((state) => restaurantById.get(state.restaurantId)).filter(Boolean) as Restaurant[];
+  const visitedRestaurants = userRestaurantStates.filter((state) => state.status === "visited").map((state) => restaurantById.get(state.restaurantId)).filter(Boolean) as Restaurant[];
+
   return (
     <main>
       <section className="hero">
@@ -213,41 +273,69 @@ export function App() {
           <h1>Where should we go tonight?</h1>
         </div>
         <div className="profile-menu">
-          <button
-            type="button"
-            className="profile-button"
-            aria-haspopup="menu"
-            aria-expanded={showProfileMenu}
-            onClick={() => setShowProfileMenu((current) => !current)}
-          >
-            <UserCircle size={22} />
-            <span>{profile?.name || "Profile"}</span>
-          </button>
-          {showProfileMenu && (
-            <div className="profile-menu-popover" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setShowPreferences(true);
-                  setShowAdminPanel(false);
-                  setShowProfileMenu(false);
-                }}
-              >
-                Preferences
+          {runtimeConfig?.authMode === "cognito" && !authSession ? (
+            <div className="auth-buttons">
+              <button type="button" className="profile-button" disabled={!authReady} onClick={() => runtimeConfig && beginHostedAuth(runtimeConfig, "login")}>
+                <LogIn size={20} />
+                <span>Login</span>
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setShowAdminPanel(true);
-                  setShowPreferences(false);
-                  setShowProfileMenu(false);
-                }}
-              >
-                Admin Panel
+              <button type="button" className="profile-button" disabled={!authReady} onClick={() => runtimeConfig && beginHostedAuth(runtimeConfig, "signup")}>
+                <UserCircle size={20} />
+                <span>Sign up</span>
               </button>
             </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="profile-button"
+                aria-haspopup="menu"
+                aria-expanded={showProfileMenu}
+                onClick={() => setShowProfileMenu((current) => !current)}
+              >
+                <UserCircle size={22} />
+                <span>{displayName}</span>
+              </button>
+              {showProfileMenu && (
+                <div className="profile-menu-popover" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowProfileModal(true);
+                      setShowProfileMenu(false);
+                    }}
+                  >
+                    Profile
+                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setShowAdminPanel(true);
+                        setShowProfileModal(false);
+                        setShowProfileMenu(false);
+                      }}
+                    >
+                      Admin Panel
+                    </button>
+                  )}
+                  {runtimeConfig?.authMode === "cognito" && (
+                    <>
+                      <button type="button" role="menuitem" onClick={() => runtimeConfig && beginHostedAuth(runtimeConfig, "reset")}>
+                        <KeyRound size={16} />
+                        Reset Password
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => runtimeConfig && signOut(runtimeConfig)}>
+                        <LogOut size={16} />
+                        Logout
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="quick-panel">
@@ -270,17 +358,77 @@ export function App() {
 
       {status && <div className={`status ${status.tone}`} role="status">{status.message}</div>}
 
+      {!isSignedIn && authReady && runtimeConfig && (
+        <section className="auth-gate">
+          <h2>Date night starts with your profile.</h2>
+          <p>Sign in or create an account to save preferences, heart restaurants, and track visits.</p>
+          <div className="auth-buttons">
+            <button type="button" className="primary" onClick={() => beginHostedAuth(runtimeConfig, "login")}><LogIn size={18} /> Login</button>
+            <button type="button" className="secondary-action" onClick={() => beginHostedAuth(runtimeConfig, "signup")}><UserCircle size={18} /> Sign up</button>
+          </div>
+        </section>
+      )}
+
+      {isSignedIn && (
+      <>
       <section className="recommendations">
         {recommendations.map((recommendation) => (
           <RecommendationCard
             key={recommendation.category}
             recommendation={recommendation}
-            onWantToTry={(id) => api.saveWantToTry(id)}
+            onWantToTry={saveWantToTry}
             onVisited={markVisited}
             onArchive={(id) => api.archive(id)}
           />
         ))}
       </section>
+
+      {profile && showProfileModal && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="profile-modal" role="dialog" aria-modal="true" aria-label="Profile">
+            <div className="panel-heading">
+              <div className="panel-title">
+                <UserCircle size={24} />
+                <h2>Profile</h2>
+              </div>
+              <button type="button" className="icon-button" aria-label="Close profile" onClick={() => setShowProfileModal(false)}><X size={20} /></button>
+            </div>
+            <div className="profile-form-grid">
+              <label className="field"><span>First name</span><input value={profile.firstName ?? firstNameFrom(profile.name)} onChange={(event) => setProfile({ ...profile, firstName: event.target.value })} /></label>
+              <label className="field"><span>Last name</span><input value={profile.lastName ?? lastNameFrom(profile.name)} onChange={(event) => setProfile({ ...profile, lastName: event.target.value })} /></label>
+              <label className="field full"><span>Email address</span><input value={profile.email ?? authSession?.email ?? ""} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></label>
+            </div>
+            <div className="profile-section">
+              <h3>Preferences</h3>
+              <label className="field"><span>Home area</span><input value={profile.homeArea} onChange={(event) => setProfile({ ...profile, homeArea: event.target.value })} /></label>
+              <ChipInput label="Favorite cuisines" options={cuisines} value={profile.favoriteCuisines} onChange={(favoriteCuisines) => setProfile({ ...profile, favoriteCuisines })} />
+              <ChipInput label="Preferred tags" options={tags} value={profile.preferredTags} onChange={(preferredTags) => setProfile({ ...profile, preferredTags })} />
+              <ChipInput label="Price levels" options={prices} value={profile.preferredPriceLevels} onChange={(preferredPriceLevels) => setProfile({ ...profile, preferredPriceLevels })} />
+              <button className="primary" disabled={busyAction === "profile"} onClick={saveProfile}><Save size={18} /> {busyAction === "profile" ? "Saving..." : "Save Profile"}</button>
+            </div>
+            <div className="profile-lists">
+              <section className="profile-section">
+                <h3>Visited Restaurants</h3>
+                {visitedRestaurants.length ? visitedRestaurants.map((restaurant) => (
+                  <div className="saved-restaurant" key={restaurant.restaurantId}>
+                    <strong>{restaurant.name}</strong>
+                    <span>{displayRestaurantLocation(restaurant)} | {restaurant.cuisineCategories.join(", ") || "Unknown"} | {restaurant.priceLevel} | {visitCountByRestaurantId[restaurant.restaurantId] ?? 1} visit{(visitCountByRestaurantId[restaurant.restaurantId] ?? 1) === 1 ? "" : "s"}</span>
+                  </div>
+                )) : <p className="empty">No visited restaurants yet.</p>}
+              </section>
+              <section className="profile-section">
+                <h3>Hearted Restaurants</h3>
+                {heartedRestaurants.length ? heartedRestaurants.map((restaurant) => (
+                  <div className="saved-restaurant" key={restaurant.restaurantId}>
+                    <strong>{restaurant.name}</strong>
+                    <span>{displayRestaurantLocation(restaurant)} | {restaurant.cuisineCategories.join(", ") || "Unknown"} | {restaurant.priceLevel}</span>
+                  </div>
+                )) : <p className="empty">No hearted restaurants yet.</p>}
+              </section>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="workspace-grid">
         <div className="panel">
@@ -308,44 +456,7 @@ export function App() {
           <button className="primary" disabled={!visitRestaurantId || busyAction === "visit"} onClick={() => markVisited(visitRestaurantId)}><Save size={18} /> {busyAction === "visit" ? "Saving..." : "Would go back"}</button>
         </div>
 
-        {profile && showPreferences && (
-          <div className="panel profile-panel">
-            <div className="panel-heading">
-              <h2>Preferences</h2>
-              <button type="button" className="text-link" onClick={() => setShowPreferences(false)}>Close</button>
-            </div>
-            <label className="field"><span>Name</span><input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label>
-            <label className="field"><span>Home area</span><input value={profile.homeArea} onChange={(event) => setProfile({ ...profile, homeArea: event.target.value })} /></label>
-            <ChipInput label="Favorite cuisines" options={cuisines} value={profile.favoriteCuisines} onChange={(favoriteCuisines) => setProfile({ ...profile, favoriteCuisines })} />
-            <ChipInput label="Preferred tags" options={tags} value={profile.preferredTags} onChange={(preferredTags) => setProfile({ ...profile, preferredTags })} />
-            <ChipInput label="Price levels" options={prices} value={profile.preferredPriceLevels} onChange={(preferredPriceLevels) => setProfile({ ...profile, preferredPriceLevels })} />
-            <button className="primary" disabled={busyAction === "profile"} onClick={saveProfile}><Save size={18} /> {busyAction === "profile" ? "Saving..." : "Save"}</button>
-            <div className="profile-links">
-              <button type="button" className="text-link" onClick={() => setShowSavedRestaurants((current) => !current)}>
-                {showSavedRestaurants ? "Hide saved restaurants" : `View saved restaurants (${restaurants.length})`}
-              </button>
-            </div>
-            {showSavedRestaurants && (
-              <section className="saved-restaurants-panel" aria-label="Saved restaurants">
-                <h3>Saved Restaurants</h3>
-                {restaurants.length ? (
-                  <div className="saved-list">
-                    {restaurants.slice(0, 8).map((restaurant) => (
-                      <div className="saved-restaurant" key={restaurant.restaurantId}>
-                        <strong>{restaurant.name}</strong>
-                        <span>{displayRestaurantLocation(restaurant)} · {restaurant.cuisineCategories.join(", ") || "Unknown"} · {restaurant.priceLevel}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty">No restaurants saved yet.</p>
-                )}
-              </section>
-            )}
-          </div>
-        )}
-
-        {showAdminPanel && (
+        {isAdmin && showAdminPanel && (
           <div className="panel admin-panel">
             <div className="panel-heading">
               <div className="panel-title">
@@ -448,6 +559,8 @@ export function App() {
           </div>
         )}
       </section>
+      </>
+      )}
     </main>
   );
 
@@ -474,6 +587,25 @@ function formatRestaurantArea(city: string, state: string) {
 function displayRestaurantLocation(restaurant: Restaurant) {
   const cityState = formatRestaurantArea(restaurant.city ?? "", restaurant.state ?? "");
   return [cityState || restaurant.area, restaurant.zipCode].filter(Boolean).join(" ");
+}
+
+function applyProfileDefaults(profile: UserProfile, session?: AuthSession): UserProfile {
+  const nextProfile = profile.homeArea === "Reston" ? { ...profile, homeArea: defaultArea } : profile;
+  return {
+    ...nextProfile,
+    firstName: nextProfile.firstName ?? session?.firstName ?? firstNameFrom(nextProfile.name),
+    lastName: nextProfile.lastName ?? session?.lastName ?? lastNameFrom(nextProfile.name),
+    email: nextProfile.email ?? session?.email
+  };
+}
+
+function firstNameFrom(name = "") {
+  return name.trim().split(/\s+/)[0] ?? "";
+}
+
+function lastNameFrom(name = "") {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts.slice(1).join(" ") : "";
 }
 
 function splitCsv(value: string) {
