@@ -43,15 +43,12 @@ export class AppService {
 
   async createRestaurant(input: Partial<Restaurant>) {
     const timestamp = nowIso();
+    const location = normalizeRestaurantLocation(input);
     const restaurant: Restaurant = {
       entityType: "Restaurant",
       restaurantId: input.restaurantId ?? randomUUID(),
       name: required(input.name, "name"),
-      area: required(input.area ?? formatArea(input.city, input.state), "area"),
-      address: input.address,
-      city: cleanOptional(input.city),
-      state: cleanOptional(input.state),
-      zipCode: cleanOptional(input.zipCode),
+      ...location,
       latitude: input.latitude,
       longitude: input.longitude,
       cuisineCategories: input.cuisineCategories ?? [],
@@ -69,9 +66,10 @@ export class AppService {
   async updateRestaurant(restaurantId: string, input: Partial<Restaurant>) {
     const current = await this.repo.getRestaurant(restaurantId);
     if (!current) throw new Error("restaurant not found");
+    const next = { ...current, ...input };
     return this.repo.putRestaurant({
-      ...current,
-      ...input,
+      ...next,
+      ...normalizeRestaurantLocation(next),
       restaurantId,
       entityType: "Restaurant",
       updatedAt: nowIso()
@@ -212,6 +210,31 @@ function required(value: string | undefined, field: string): string {
 function cleanOptional(value: string | undefined): string | undefined {
   const cleaned = value?.trim();
   return cleaned || undefined;
+}
+
+function normalizeRestaurantLocation(input: Partial<Restaurant>): Pick<Restaurant, "address" | "area" | "city" | "state" | "zipCode"> {
+  const city = required(input.city, "city");
+  const state = normalizeState(input.state);
+  const zipCode = normalizeZipCode(input.zipCode);
+  return {
+    address: cleanOptional(input.address),
+    area: required(formatArea(city, state), "area"),
+    city,
+    state,
+    zipCode
+  };
+}
+
+function normalizeState(value: string | undefined) {
+  const state = required(value, "state").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(state)) throw new Error("state must be a 2-letter code");
+  return state;
+}
+
+function normalizeZipCode(value: string | undefined) {
+  const zipCode = required(value, "zipCode");
+  if (!/^\d{5}(-\d{4})?$/.test(zipCode)) throw new Error("zipCode must be a valid ZIP code");
+  return zipCode;
 }
 
 function formatArea(city?: string, state?: string): string | undefined {

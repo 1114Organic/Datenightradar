@@ -49,6 +49,7 @@ export class DynamoRestaurantRepository implements RestaurantRepository {
   }
 
   async putRestaurant(restaurant: Restaurant) {
+    await this.deleteRestaurantIndexes(restaurant.restaurantId);
     await this.doc.send(new PutCommand({ TableName: this.tableName, Item: { ...restaurant, PK: `RESTAURANT#${restaurant.restaurantId}`, SK: "METADATA" } }));
     await this.doc.send(new PutCommand({ TableName: this.tableName, Item: { ...restaurant, PK: `AREA#${normalizeKey(restaurant.area)}`, SK: `RESTAURANT#${restaurant.restaurantId}`, entityType: "AreaRestaurantIndex" } }));
     for (const cuisine of restaurant.cuisineCategories) {
@@ -58,6 +59,11 @@ export class DynamoRestaurantRepository implements RestaurantRepository {
   }
 
   async deleteRestaurant(restaurantId: string) {
+    await this.deleteRestaurantIndexes(restaurantId);
+    await this.doc.send(new DeleteCommand({ TableName: this.tableName, Key: { PK: `RESTAURANT#${restaurantId}`, SK: "METADATA" } }));
+  }
+
+  private async deleteRestaurantIndexes(restaurantId: string) {
     const indexItems = await this.doc.send(new ScanCommand({
       TableName: this.tableName,
       FilterExpression: "restaurantId = :restaurantId AND entityType IN (:areaType, :cuisineType)",
@@ -72,7 +78,6 @@ export class DynamoRestaurantRepository implements RestaurantRepository {
       TableName: this.tableName,
       Key: { PK: item.PK, SK: item.SK }
     }))));
-    await this.doc.send(new DeleteCommand({ TableName: this.tableName, Key: { PK: `RESTAURANT#${restaurantId}`, SK: "METADATA" } }));
   }
 
   async getUserRestaurantState(userId: string, restaurantId: string) {

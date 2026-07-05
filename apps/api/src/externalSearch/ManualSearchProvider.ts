@@ -30,11 +30,16 @@ export class ManualSearchProvider implements RestaurantSearchProvider {
     const seeded = charlestonSeedRestaurants.filter((restaurant) => matchesAreaOrZip(restaurant, areaQuery));
     if (seeded.length) return seeded;
     if (!input.query) return [];
+    const location = parseManualLocation(input.area);
+    if (!location) return [];
     return [{
       restaurantId: `manual-${normalizeKey([input.query, input.area].filter(Boolean).join("-"))}`,
       name: input.query,
-      area: input.area ?? "Unknown",
-      address: input.area ? `${input.area} area` : undefined,
+      area: `${location.city}, ${location.state}`,
+      city: location.city,
+      state: location.state,
+      zipCode: location.zipCode,
+      address: `${input.query}, ${location.city}, ${location.state} ${location.zipCode}`,
       cuisineCategories: [],
       priceLevel: "$$",
       tags: [],
@@ -83,4 +88,14 @@ function matchesAreaOrZip(restaurant: NormalizedRestaurant, query: string) {
   if (city && target === city) return true;
   if (city === "mount pleasant" && target === "mt pleasant") return true;
   return charlestonCountyAreas.includes(target) && city === target;
+}
+
+function parseManualLocation(area?: string) {
+  const match = area?.trim().match(/^(.+?),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  if (!match) return undefined;
+  return {
+    city: match[1].trim(),
+    state: match[2].toUpperCase(),
+    zipCode: match[3]
+  };
 }
