@@ -48,10 +48,14 @@ TABLE_NAME=RestaurantRadarTable
 DEV_AUTH_BYPASS=true
 DEFAULT_USER_ID=dev-user
 EXTERNAL_SEARCH_PROVIDER=manual
+GOOGLE_PLACES_API_KEY=
+GOOGLE_PLACES_PAGE_SIZE=10
 LOG_LEVEL=info
 ```
 
 `DEV_AUTH_BYPASS=true` uses `DEFAULT_USER_ID` for local development. Production should validate Cognito JWTs at API Gateway/Lambda and set `DEV_AUTH_BYPASS=false`.
+
+Set `EXTERNAL_SEARCH_PROVIDER=google` with `GOOGLE_PLACES_API_KEY` to import restaurant inventory from Google Places instead of the built-in manual seed provider. Keep the key server-side; never expose it through `VITE_` frontend config.
 
 ## Deploy
 
@@ -69,6 +73,17 @@ npm run cdk -- deploy -c authMode=cognito -c budgetEmail=you@example.com -c mont
 ```
 
 The `authMode=cognito` stack protects API routes with a Cognito authorizer and serves a generated `runtime-config.json` so the browser can use the deployed API, Cognito hosted sign-in, sign-up, logout, and password reset flow.
+
+To enable Google Places-backed restaurant imports, enable Places API (New) in Google Cloud, create a restricted server-side API key, then deploy with:
+
+```bash
+npm run cdk -- deploy \
+  -c authMode=cognito \
+  -c externalSearchProvider=google \
+  -c googlePlacesApiKey=<your-google-places-api-key>
+```
+
+Optionally pass `-c googlePlacesPageSize=5` or another value from 1 to 20 to cap results per import target.
 
 Admin tools are restricted to Cognito users in the `Admin` group. After your first sign-up, add your user to that group in the AWS Cognito console, or run:
 
@@ -99,7 +114,8 @@ npm run cdk -- destroy
 
 - Lambda, DynamoDB on-demand, S3, CloudFront, and HTTP API avoid always-on compute.
 - External search defaults to manual mode and is abstracted behind a provider interface.
-- Cache imported restaurant records in DynamoDB before calling any future paid provider.
+- Google Places imports are admin-only and capped by `GOOGLE_PLACES_PAGE_SIZE`.
+- Cache imported restaurant records in DynamoDB before calling paid providers again.
 - Lambda CloudWatch logs are retained for one week.
 - Keep logs concise and avoid logging notes, secrets, tokens, or API keys.
 - Pass `-c budgetEmail=you@example.com` during deploy to create AWS Budget email alerts.

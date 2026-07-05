@@ -21,11 +21,17 @@ export class RestaurantRadarStack extends Stack {
     super(scope, id, props);
     const authMode = this.node.tryGetContext("authMode") === "dev" ? "dev" : "cognito";
     const budgetEmail = this.node.tryGetContext("budgetEmail") as string | undefined;
+    const externalSearchProvider = this.node.tryGetContext("externalSearchProvider") === "google" ? "google" : "manual";
+    const googlePlacesApiKey = this.node.tryGetContext("googlePlacesApiKey") as string | undefined;
+    const googlePlacesPageSize = Number(this.node.tryGetContext("googlePlacesPageSize") ?? 10);
     const requestedBudgetLimit = Number(this.node.tryGetContext("monthlyBudgetLimit") ?? 10);
     const monthlyBudgetLimit = Number.isFinite(requestedBudgetLimit) && requestedBudgetLimit > 0
       ? requestedBudgetLimit
       : 10;
     const budgetAlertThresholds = Array.from(new Set([1, 5, monthlyBudgetLimit])).sort((a, b) => a - b);
+    if (externalSearchProvider === "google" && !googlePlacesApiKey) {
+      throw new Error("Pass -c googlePlacesApiKey=<key> when -c externalSearchProvider=google.");
+    }
 
     const table = new Table(this, "RestaurantRadarTable", {
       tableName: "RestaurantRadarTable",
@@ -103,7 +109,9 @@ export class RestaurantRadarStack extends Stack {
         TABLE_NAME: table.tableName,
         DEV_AUTH_BYPASS: authMode === "dev" ? "true" : "false",
         DEFAULT_USER_ID: "dev-user",
-        EXTERNAL_SEARCH_PROVIDER: "manual",
+        EXTERNAL_SEARCH_PROVIDER: externalSearchProvider,
+        GOOGLE_PLACES_API_KEY: googlePlacesApiKey ?? "",
+        GOOGLE_PLACES_PAGE_SIZE: Number.isFinite(googlePlacesPageSize) ? String(googlePlacesPageSize) : "10",
         LOG_LEVEL: "info"
       }
     });
