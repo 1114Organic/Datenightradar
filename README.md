@@ -49,13 +49,14 @@ DEV_AUTH_BYPASS=true
 DEFAULT_USER_ID=dev-user
 EXTERNAL_SEARCH_PROVIDER=manual
 GOOGLE_PLACES_API_KEY=
+GOOGLE_PLACES_API_KEY_SECRET_NAME=
 GOOGLE_PLACES_PAGE_SIZE=10
 LOG_LEVEL=info
 ```
 
 `DEV_AUTH_BYPASS=true` uses `DEFAULT_USER_ID` for local development. Production should validate Cognito JWTs at API Gateway/Lambda and set `DEV_AUTH_BYPASS=false`.
 
-Set `EXTERNAL_SEARCH_PROVIDER=google` with `GOOGLE_PLACES_API_KEY` to import restaurant inventory from Google Places instead of the built-in manual seed provider. Keep the key server-side; never expose it through `VITE_` frontend config.
+Set `EXTERNAL_SEARCH_PROVIDER=google` with `GOOGLE_PLACES_API_KEY` for local Google Places imports, or `GOOGLE_PLACES_API_KEY_SECRET_NAME` for deployed AWS imports. Keep the key server-side; never expose it through `VITE_` frontend config.
 
 ## Deploy
 
@@ -74,13 +75,19 @@ npm run cdk -- deploy -c authMode=cognito -c budgetEmail=you@example.com -c mont
 
 The `authMode=cognito` stack protects API routes with a Cognito authorizer and serves a generated `runtime-config.json` so the browser can use the deployed API, Cognito hosted sign-in, sign-up, logout, and password reset flow.
 
-To enable Google Places-backed restaurant imports, enable Places API (New) in Google Cloud, create a restricted server-side API key, then deploy with:
+To enable Google Places-backed restaurant imports, enable Places API (New) in Google Cloud, create a restricted server-side API key, store it in AWS Secrets Manager, then deploy with the secret name:
+
+```bash
+aws secretsmanager create-secret \
+  --name DateNightRadar/GooglePlacesApiKey \
+  --secret-string <your-google-places-api-key>
+```
 
 ```bash
 npm run cdk -- deploy \
   -c authMode=cognito \
   -c externalSearchProvider=google \
-  -c googlePlacesApiKey=<your-google-places-api-key>
+  -c googlePlacesApiKeySecretName=DateNightRadar/GooglePlacesApiKey
 ```
 
 Optionally pass `-c googlePlacesPageSize=5` or another value from 1 to 20 to cap results per import target.

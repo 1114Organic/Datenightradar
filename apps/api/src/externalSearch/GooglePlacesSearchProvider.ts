@@ -1,3 +1,4 @@
+import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { NormalizedRestaurant, RestaurantSearchInput, RestaurantSearchProvider } from "./RestaurantSearchProvider.js";
 import { normalizeKey } from "../utils/normalize.js";
 
@@ -19,13 +20,16 @@ const fieldMask = [
 ].join(",");
 
 export class GooglePlacesSearchProvider implements RestaurantSearchProvider {
-  constructor(private apiKey: string, private pageSize = 10) {}
+  private secretsClient?: SecretsManagerClient;
+  private cachedApiKey?: string;
+
+  constructor(private config: { apiKey?: string; apiKeySecretName?: string; pageSize?: number }) {}
 
   async searchRestaurants(input: RestaurantSearchInput): Promise<NormalizedRestaurant[]> {
     const body: Record<string, unknown> = {
       textQuery: buildTextQuery(input),
       includedType: "restaurant",
-      pageSize: clampPageSize(this.pageSize)
+      pageSize: clampPageSize(this.config.pageSize ?? 10)
     };
     if (input.latitude != null && input.longitude != null) {
       body.locationBias = {
@@ -40,7 +44,7 @@ export class GooglePlacesSearchProvider implements RestaurantSearchProvider {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-goog-api-key": this.apiKey,
+        "x-goog-api-key": await this.apiKey(),
         "x-goog-fieldmask": fieldMask
       },
       body: JSON.stringify(body)
@@ -54,12 +58,26 @@ export class GooglePlacesSearchProvider implements RestaurantSearchProvider {
     const placeId = externalId.replace(/^places\//, "");
     const response = await fetch(`${placeDetailsEndpoint}/${encodeURIComponent(placeId)}`, {
       headers: {
-        "x-goog-api-key": this.apiKey,
+        "x-goog-api-key": await this.apiKey(),
         "x-goog-fieldmask": fieldMask.replaceAll("places.", "")
       }
     });
     if (!response.ok) throw new Error(`Google Places details failed: ${response.status} ${await response.text()}`);
     return toRestaurant(await response.json() as GooglePlace);
+  }
+
+  private async apiKey() {
+    if (this.cachedApiKey) return this.cachedApiKey;
+    if (this.config.apiKey) {
+      this.cachedApiKey = this.config.apiKey;
+      return this.cachedApiKey;
+    }
+    if (!this.config.apiKeySecretName) throw new Error("Google Places API key is not configured");
+    this.secretsClient ??= new SecretsManagerClient({});
+    const secret = await this.secretsClient.send(new GetSecretValueCommand({ SecretId: this.config.apiKeySecretName }));
+    const value = secret.SecretString ?? decodeSecretBinary(secret.SecretBinary);
+    this.cachedApiKey = parseApiKeySecret(value);
+    return this.cachedApiKey;
   }
 }
 
@@ -179,4 +197,20 @@ function clampPageSize(pageSize: number) {
 
 function milesToMeters(miles: number) {
   return Math.min(Math.max(miles, 0.1), 31) * 1609.344;
+}
+
+function parseApiKeySecret(value: string | undefined) {
+  if (!value?.trim()) throw new Error("Google Places API key secret is empty");
+  try {
+    const parsed = JSON.parse(value) as { apiKey?: string; GOOGLE_PLACES_API_KEY?: string };
+    const apiKey = parsed.apiKey ?? parsed.GOOGLE_PLACES_API_KEY;
+    if (apiKey?.trim()) return apiKey.trim();
+  } catch {
+    return value.trim();
+  }
+  throw new Error("Google Places API key secret must be a string or JSON with apiKey");
+}
+
+function decodeSecretBinary(secretBinary?: Uint8Array) {
+  return secretBinary ? new TextDecoder().decode(secretBinary) : undefined;
 }

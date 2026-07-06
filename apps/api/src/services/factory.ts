@@ -16,8 +16,15 @@ export function createAppService() {
 function createSearchProvider(): RestaurantSearchProvider {
   if (process.env.EXTERNAL_SEARCH_PROVIDER === "google") {
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey) throw new Error("GOOGLE_PLACES_API_KEY is required when EXTERNAL_SEARCH_PROVIDER=google");
-    return new GooglePlacesSearchProvider(apiKey, Number(process.env.GOOGLE_PLACES_PAGE_SIZE ?? 10));
+    const apiKeySecretName = process.env.GOOGLE_PLACES_API_KEY_SECRET_NAME;
+    if (!apiKey && !apiKeySecretName) {
+      throw new Error("GOOGLE_PLACES_API_KEY or GOOGLE_PLACES_API_KEY_SECRET_NAME is required when EXTERNAL_SEARCH_PROVIDER=google");
+    }
+    return new GooglePlacesSearchProvider({
+      apiKey,
+      apiKeySecretName,
+      pageSize: Number(process.env.GOOGLE_PLACES_PAGE_SIZE ?? 10)
+    });
   }
   return new ManualSearchProvider();
 }
