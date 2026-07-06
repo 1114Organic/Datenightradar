@@ -39,9 +39,9 @@ export interface Restaurant {
   name: string;
   address?: string;
   area: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
+  city: string;
+  state: string;
+  zipCode: string;
   latitude?: number;
   longitude?: number;
   cuisineCategories: string[];

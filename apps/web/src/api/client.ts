@@ -18,9 +18,9 @@ export interface Restaurant {
   restaurantId: string;
   name: string;
   area: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
+  city: string;
+  state: string;
+  zipCode: string;
   address?: string;
   cuisineCategories: string[];
   priceLevel: string;

@@ -128,6 +128,11 @@ export function App() {
       setStatus({ tone: "error", message: "Enter a restaurant name before adding it." });
       return;
     }
+    const locationError = validateRestaurantLocation(newRestaurant);
+    if (locationError) {
+      setStatus({ tone: "error", message: locationError });
+      return;
+    }
     setBusyAction("add");
     setStatus(undefined);
     try {
@@ -176,6 +181,11 @@ export function App() {
   async function saveRestaurantEdit(restaurantId: string) {
     const current = editingRestaurants[restaurantId];
     if (!current) return;
+    const locationError = validateRestaurantLocation(current);
+    if (locationError) {
+      setStatus({ tone: "error", message: locationError });
+      return;
+    }
     setBusyAction("add");
     setStatus(undefined);
     try {
@@ -582,6 +592,15 @@ function formatRestaurantArea(city: string, state: string) {
   const cleanedCity = city.trim();
   const cleanedState = state.trim().toUpperCase();
   return [cleanedCity, cleanedState].filter(Boolean).join(", ");
+}
+
+function validateRestaurantLocation(input: { city?: string; state?: string; zipCode?: string }) {
+  if (!input.city?.trim()) return "Enter a city before saving the restaurant.";
+  const state = input.state?.trim().toUpperCase() ?? "";
+  if (!/^[A-Z]{2}$/.test(state)) return "Enter a 2-letter state before saving the restaurant.";
+  const zipCode = input.zipCode?.trim() ?? "";
+  if (!/^\d{5}(-\d{4})?$/.test(zipCode)) return "Enter a valid ZIP code before saving the restaurant.";
+  return undefined;
 }
 
 function displayRestaurantLocation(restaurant: Restaurant) {

@@ -12,6 +12,7 @@ import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { AccountRecovery, CfnUserPoolGroup, OAuthScope, UserPool, UserPoolClientIdentityProvider } from "aws-cdk-lib/aws-cognito";
 import { Bucket, BlockPublicAccess } from "aws-cdk-lib/aws-s3";
+import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { Distribution, ViewerProtocolPolicy } from "aws-cdk-lib/aws-cloudfront";
 import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
 import { BucketDeployment, Source } from "aws-cdk-lib/aws-s3-deployment";
@@ -21,11 +22,17 @@ export class RestaurantRadarStack extends Stack {
     super(scope, id, props);
     const authMode = this.node.tryGetContext("authMode") === "dev" ? "dev" : "cognito";
     const budgetEmail = this.node.tryGetContext("budgetEmail") as string | undefined;
+    const externalSearchProvider = this.node.tryGetContext("externalSearchProvider") === "google" ? "google" : "manual";
+    const googlePlacesApiKeySecretName = this.node.tryGetContext("googlePlacesApiKeySecretName") as string | undefined;
+    const googlePlacesPageSize = Number(this.node.tryGetContext("googlePlacesPageSize") ?? 10);
     const requestedBudgetLimit = Number(this.node.tryGetContext("monthlyBudgetLimit") ?? 10);
     const monthlyBudgetLimit = Number.isFinite(requestedBudgetLimit) && requestedBudgetLimit > 0
       ? requestedBudgetLimit
       : 10;
     const budgetAlertThresholds = Array.from(new Set([1, 5, monthlyBudgetLimit])).sort((a, b) => a - b);
+    if (externalSearchProvider === "google" && !googlePlacesApiKeySecretName) {
+      throw new Error("Pass -c googlePlacesApiKeySecretName=<secret-name> when -c externalSearchProvider=google.");
+    }
 
     const table = new Table(this, "RestaurantRadarTable", {
       tableName: "RestaurantRadarTable",
@@ -85,6 +92,9 @@ export class RestaurantRadarStack extends Stack {
       retention: RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.RETAIN
     });
+    const googlePlacesApiKeySecret = googlePlacesApiKeySecretName
+      ? Secret.fromSecretNameV2(this, "GooglePlacesApiKeySecret", googlePlacesApiKeySecretName)
+      : undefined;
 
     const apiFunction = new NodejsFunction(this, "ApiFunction", {
       entry: "../apps/api/src/handlers/api.ts",
@@ -103,12 +113,15 @@ export class RestaurantRadarStack extends Stack {
         TABLE_NAME: table.tableName,
         DEV_AUTH_BYPASS: authMode === "dev" ? "true" : "false",
         DEFAULT_USER_ID: "dev-user",
-        EXTERNAL_SEARCH_PROVIDER: "manual",
+        EXTERNAL_SEARCH_PROVIDER: externalSearchProvider,
+        GOOGLE_PLACES_API_KEY_SECRET_NAME: googlePlacesApiKeySecretName ?? "",
+        GOOGLE_PLACES_PAGE_SIZE: Number.isFinite(googlePlacesPageSize) ? String(googlePlacesPageSize) : "10",
         LOG_LEVEL: "info"
       }
     });
 
     table.grantReadWriteData(apiFunction);
+    googlePlacesApiKeySecret?.grantRead(apiFunction);
 
     new Rule(this, "WeeklyRestaurantImportRule", {
       schedule: Schedule.cron({ minute: "0", hour: "9", weekDay: "SUN" }),
